@@ -3,8 +3,11 @@ use crossbeam_queue::ArrayQueue;
 use core::{pin::Pin, task::{Poll, Context}};
 use futures_util::stream::Stream;
 use futures_util::task::AtomicWaker;
+use alloc::vec::Vec;
 
 use crate::println;
+use crate::shell::{pass_to_shell, prompt};
+
 
 use futures_util::stream::StreamExt;
 use pc_keyboard::{layouts, DecodedKey, HandleControl, Keyboard, ScancodeSet1};
@@ -66,17 +69,54 @@ pub(crate) fn add_scancode(scancode: u8) {
 
 pub async fn print_keypresses() {
     let mut scancodes = ScancodeStream::new();
-    let mut keyboard = Keyboard::new(layouts::Us104Key, ScancodeSet1,
-        HandleControl::Ignore);
+    let mut keyboard = Keyboard::new(layouts::Us104Key, ScancodeSet1, HandleControl::Ignore);
+    let mut buff: Vec<u8> = Vec::new();
+
+    prompt();
 
     while let Some(scancode) = scancodes.next().await {
         if let Ok(Some(key_event)) = keyboard.add_byte(scancode) {
             if let Some(key) = keyboard.process_keyevent(key_event) {
                 match key {
-                    DecodedKey::Unicode(character) => print!("{}", character),
-                    DecodedKey::RawKey(key) => print!("{:?}", key),
+                    DecodedKey::Unicode(character) => {
+                        if character == '\x08' {
+                            // Backspace
+                            if !(buff.len() == 0) {
+                                print!("\x7f");
+                                //print!("bkspc");
+                                // TODO: Remove from buffer
+
+                                buff = rmvec(buff);
+                            }
+                        } else if character == '\n' {
+                            print!("\n");
+                            pass_to_shell(buff);
+                            // Prompt
+                            buff = Vec::new();
+                        } else {
+                            buff.push(character as u8);
+                            print!("{}", character);
+                        }
+                    }
+                    DecodedKey::RawKey(_key) => {
+                        //print!("{:?}", key),
+                    },
                 }
             }
         }
     }
+}
+
+fn rmvec(v: Vec<u8>) -> Vec<u8> {
+    let mut i = 0;
+    let mut buf: Vec<u8> = Vec::new();
+
+    while i < v.len() - 1 {
+
+        buf.push(v[i]);
+        i += 1;
+
+    }
+
+    buf
 }
