@@ -13,6 +13,17 @@ pub fn convert_ansii_to_color(buf: Vec<u8>) -> ColorCode {
 		b"[35" => { color_code = ColorCode::new(Color::Magenta, Color::Black); },
 		b"[36" => { color_code = ColorCode::new(Color::Cyan, Color::Black); },
 		b"[37" => { color_code = ColorCode::new(Color::White, Color::Black); },
+		
+		// Backgrounds
+
+		b"[40" => { color_code = ColorCode::new(Color::White, Color::Black); },
+		b"[41" => { color_code = ColorCode::new(Color::White, Color::Red); },
+		b"[42" => { color_code = ColorCode::new(Color::White, Color::Green); },
+		b"[43" => { color_code = ColorCode::new(Color::White, Color::Yellow); },
+		b"[44" => { color_code = ColorCode::new(Color::White, Color::Blue); },
+		b"[45" => { color_code = ColorCode::new(Color::White, Color::Magenta); },	
+		b"[46" => { color_code = ColorCode::new(Color::White, Color::Cyan); },	
+		b"[47" => { color_code = ColorCode::new(Color::White, Color::White); },	
 		_ => {},
 	}
 

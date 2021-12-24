@@ -33,6 +33,10 @@ pub fn pass_to_shell(v: Vec<u8>) {
 			for n in 30..37 {
 				println!("\x1b[{}m{}", n, n);
 			}
+
+			for n in 40..47 {
+				println!("\x1b[{}m{}", n, n);
+			}
 		},
 		_ => {},
 	}
