@@ -16,7 +16,7 @@ use bootloader::{entry_point, BootInfo};
 entry_point!(test_kernel_main);
 
 pub mod serial;
-pub mod vga_buffer;
+// pub mod vga;
 pub mod interrupts;
 pub mod gdt;
 pub mod memory;
@@ -24,7 +24,7 @@ pub mod allocator;
 pub mod task;
 pub mod time;
 pub mod shell;
-
+pub mod vga;
 
 extern crate alloc;
 

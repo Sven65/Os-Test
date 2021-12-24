@@ -6,6 +6,8 @@ use crate::{print, println, exit_qemu, QemuExitCode};
 use crate::time::get_time;
 
 use oorandom::Rand32;
+// use crate::vga::vga_buffer::Color;
+
 const SHELL_PROMPT: &str = "TestOS > ";
 
 pub fn prompt() {
@@ -26,6 +28,11 @@ pub fn pass_to_shell(v: Vec<u8>) {
 
 			print!("Current time is {}", time);
 			
+		},
+		b"color" => {
+			for n in 30..37 {
+				println!("\x1b[{}m{}", n, n);
+			}
 		},
 		_ => {},
 	}

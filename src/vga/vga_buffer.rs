@@ -2,6 +2,8 @@ use volatile::Volatile;
 use core::fmt;
 use lazy_static::lazy_static;
 use spin::Mutex;
+use alloc::vec::Vec;
+use crate::vga::ansii::convert_ansii_to_color;
 
 #[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -28,10 +30,10 @@ pub enum Color {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(transparent)]
-struct ColorCode(u8);
+pub struct ColorCode(u8);
 
 impl ColorCode {
-    fn new(foreground: Color, background: Color) -> ColorCode {
+    pub fn new(foreground: Color, background: Color) -> ColorCode {
         ColorCode((background as u8) << 4 | (foreground as u8))
     }
 }
@@ -55,9 +57,29 @@ pub struct Writer {
     column_position: usize,
     color_code: ColorCode,
     buffer: &'static mut Buffer,
+    color_buf: Vec<u8>,
+    is_escaped: bool,
 }
 
 impl Writer {
+    pub fn handle_escape(&mut self, byte: u8) {
+        match byte {
+            b'\x1b' => {
+                // ESC
+                self.is_escaped = true;
+            }
+            b'm' => {
+                self.color_code = convert_ansii_to_color(self.color_buf.clone());
+                
+                self.color_buf = Vec::new();
+                self.is_escaped = false;
+            }
+            byte => {
+                self.color_buf.push(byte as u8);
+            }
+        }
+    }
+
     pub fn write_byte(&mut self, byte: u8) {
         match byte {
             b'\n' => self.new_line(),
@@ -68,6 +90,7 @@ impl Writer {
                     color_code: self.color_code,
                 });
             }
+           
             byte => {
                 if self.column_position >= BUFFER_WIDTH {
                     self.new_line();
@@ -90,7 +113,14 @@ impl Writer {
         for byte in s.bytes() {
             match byte {
                 // printable ASCII byte or newline
-                0x20..=0x7e | b'\n' | 0x7f => self.write_byte(byte),
+                0x1b => self.handle_escape(byte),
+                0x20..=0x7e | b'\n' | 0x7f => {
+                    if self.is_escaped {
+                        self.handle_escape(byte);
+                    } else {
+                        self.write_byte(byte);
+                    }
+                }
                 // not part of printable ASCII range
                 _ => self.write_byte(0xfe),
             }
@@ -126,6 +156,8 @@ lazy_static! {
         column_position: 0,
         color_code: ColorCode::new(Color::Yellow, Color::Black),
         buffer: unsafe { &mut *(0xb8000 as *mut Buffer) },
+        is_escaped: false,
+        color_buf: Vec::new(),
     });
 }
 
@@ -138,7 +170,7 @@ impl fmt::Write for Writer {
 
 #[macro_export]
 macro_rules! print {
-    ($($arg:tt)*) => ($crate::vga_buffer::_print(format_args!($($arg)*)));
+    ($($arg:tt)*) => ($crate::vga::vga_buffer::_print(format_args!($($arg)*)));
 }
 
 #[macro_export]
