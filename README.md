@@ -12,3 +12,4 @@ Current goals of this project includes:
 [ ] Filesystem
 [ ] Shell
 [ ] Syscall api
+[ ] Allow user code to run in userspace
