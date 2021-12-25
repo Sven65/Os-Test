@@ -1,9 +1,10 @@
 use alloc::vec::Vec;
 use alloc::string::String;
 use core::mem::transmute;
-use crate::{print, println, exit_qemu, QemuExitCode};
+use crate::{print, println, exit_qemu, QemuExitCode, serial_print, serial_println};
 
 use crate::time::get_time;
+use crate::util::bitfield::BitField;
 
 use oorandom::Rand32;
 // use crate::vga::vga_buffer::Color;
@@ -30,21 +31,34 @@ pub fn pass_to_shell(v: Vec<u8>) {
 			
 		},
 		b"color" => {
-			for n in 30..37 {
-				println!("\x1b[{}m{}", n, n);
-			}
+			serial_print!("Hello there, Serial World!");
 
-			for n in 40..47 {
-				println!("\x1b[{}m{}", n, n);
-			}
+			println!("\x1b[1;32;42mHello World");
+			// for n in 30..37 {
+			// 	println!("\x1b[{}m{}", n, n);
+			// }
 
-			for n1 in 30..37 {
-				for n2 in 40..47 {
-					print!("\x1b[{};{}m{};{} ", n1, n2, n1, n2);
-				}
-			}
+			// for n in 40..47 {
+			// 	println!("\x1b[{}m{}", n, n);
+			// }
+
+			// for n1 in 30..37 {
+			// 	for n2 in 40..47 {
+			// 		print!("\x1b[{};{}m{};{} ", n1, n2, n1, n2);
+			// 	}
+			// }
 
 			
+		},
+		b"bits" => {
+			let mut bf = BitField::new(16);
+			serial_println!("Bit 1: {}", bf.get(1));
+
+			bf.set(0);
+			bf.set(14);
+
+			serial_println!("Bit 1: {}", bf.get(1));
+			serial_println!("Value: {}", bf.get_value());
 		},
 		_ => {},
 	}

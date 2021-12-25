@@ -4,6 +4,7 @@ use lazy_static::lazy_static;
 use spin::Mutex;
 use alloc::vec::Vec;
 use crate::vga::ansii::convert_ansii_to_color;
+use crate::{serial_println};
 
 #[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -35,6 +36,7 @@ pub struct ColorCode(u8);
 impl ColorCode {
     pub fn new(foreground: Color, background: Color) -> ColorCode {
         ColorCode((background as u8) << 4 | (foreground as u8))
+        //ColorCode(0x1 | 0x3)
     }
 }
 
@@ -69,13 +71,26 @@ impl Writer {
                 self.is_escaped = true;
             }
             b'm' => {
+            	serial_println!("Encountered an m");
+
+                self.is_escaped = false;
                 self.color_code = convert_ansii_to_color(self.color_buf.clone());
                 
                 self.color_buf = Vec::new();
-                self.is_escaped = false;
             }
             byte => {
                 self.color_buf.push(byte as u8);
+
+                // let row = BUFFER_HEIGHT - 1;
+                // let col = self.column_position;
+
+                // let color_code = self.color_code;
+
+                // self.buffer.chars[row][col].write(ScreenChar {
+                //     ascii_character: byte,
+                //     color_code,
+                // });
+                // self.column_position += 1;
             }
         }
     }

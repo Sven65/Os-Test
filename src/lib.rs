@@ -25,6 +25,7 @@ pub mod task;
 pub mod time;
 pub mod shell;
 pub mod vga;
+pub mod util;
 
 extern crate alloc;
 

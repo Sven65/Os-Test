@@ -1,8 +1,34 @@
 use alloc::vec::Vec;
-use crate::vga::vga_buffer::{ColorCode, Color};
+use crate::vga::vga_buffer::{ColorCode, Color, WRITER, _print};
+use core::str::from_utf8;
+use crate::{print, println, serial_println};
 
 pub fn convert_ansii_to_color(buf: Vec<u8>) -> ColorCode {
 	let mut color_code: ColorCode = ColorCode::new(Color::White, Color::Black);
+
+	let mut color_result = from_utf8(&*buf);
+
+	serial_println!("Color result: {:#?}", color_result);
+
+
+	serial_println!("Yeet");
+
+	match color_result {
+		Err(e) => {
+			panic!("Exception when parsing color code");
+		},
+		Ok(v) => {
+			serial_println!("Color string: {}", v);
+
+			let mut split = v.split(";");
+
+			serial_println!("Hello, Serial World!");
+
+			for part in split {
+				serial_println!("Part {}", part);
+			}
+		}
+	}
 
 	match &*buf {
 		b"[30" => { color_code = ColorCode::new(Color::Black, Color::Black); },
