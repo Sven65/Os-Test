@@ -36,7 +36,6 @@ pub struct ColorCode(u8);
 impl ColorCode {
     pub fn new(foreground: Color, background: Color) -> ColorCode {
         ColorCode((background as u8) << 4 | (foreground as u8))
-        //ColorCode(0x1 | 0x3)
     }
 }
 
@@ -169,7 +168,7 @@ impl Writer {
 lazy_static! {
     pub static ref WRITER: Mutex<Writer> = Mutex::new(Writer {
         column_position: 0,
-        color_code: ColorCode::new(Color::Yellow, Color::Black),
+        color_code: ColorCode::new(Color::Pink, Color::Black),
         buffer: unsafe { &mut *(0xb8000 as *mut Buffer) },
         is_escaped: false,
         color_buf: Vec::new(),
@@ -201,6 +200,15 @@ pub fn _print(args: fmt::Arguments) {
 
     interrupts::without_interrupts(|| {
         WRITER.lock().write_fmt(args).unwrap();
+    });
+}
+
+pub fn get_chars() {
+    use x86_64::instructions::interrupts;
+
+
+    interrupts::without_interrupts(|| {
+        serial_println!("{:#?}", WRITER.lock().buffer.chars[0][0]);
     });
 }
 
