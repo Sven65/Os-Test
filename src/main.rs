@@ -6,7 +6,7 @@
 
 extern crate alloc;
 
-use test_os::{memory, println, allocator};
+use test_os::{memory, println, allocator, register_kb_hook, serial_println};
 use core::panic::PanicInfo;
 use bootloader::{BootInfo, entry_point};
 
@@ -21,6 +21,10 @@ entry_point!(kernel_main);
 
 async fn async_number() -> u32 {
     42
+}
+
+fn kb_hook_cb() {
+    serial_println!("Hello from the other hook");
 }
 
 async fn example_task() {
@@ -45,8 +49,19 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
     let mut executor = Executor::new();
     executor.spawn(Task::new(example_task()));
     executor.spawn(Task::new(keyboard::print_keypresses()));
+
+    register_kb_hook!(|| {
+        serial_println!("Hello from hook");
+    });
+
+    register_kb_hook!();
+
+    register_kb_hook!(kb_hook_cb);
+
     executor.run();
 
+
+    
 
     #[cfg(test)]
     test_main();

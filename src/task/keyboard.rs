@@ -1,9 +1,16 @@
 use conquer_once::spin::OnceCell;
 use crossbeam_queue::ArrayQueue;
 use core::{pin::Pin, task::{Poll, Context}};
-use futures_util::stream::Stream;
-use futures_util::task::AtomicWaker;
+use futures_util::{
+    stream::Stream,
+    task::AtomicWaker,
+};
 use alloc::vec::Vec;
+use lazy_static::lazy_static;
+use spin::Mutex;
+use crate::task::{Task};
+use crate::task::executor::Executor; 
+
 
 use crate::println;
 use crate::shell::{pass_to_shell, prompt};
@@ -12,9 +19,16 @@ use crate::shell::{pass_to_shell, prompt};
 use futures_util::stream::StreamExt;
 use pc_keyboard::{layouts, DecodedKey, HandleControl, Keyboard, ScancodeSet1};
 use crate::print;
+use crate::serial_println;
 
 static SCANCODE_QUEUE: OnceCell<ArrayQueue<u8>> = OnceCell::uninit();
 static WAKER: AtomicWaker = AtomicWaker::new();
+
+//let mut KEYBOARD_HOOKS: Vec<fn() -> !> = Vec::new();
+
+pub struct KeyboardHooks {
+    hooks: Vec<fn()>,
+}
 
 pub struct ScancodeStream {
     _private: (),
@@ -27,6 +41,21 @@ impl ScancodeStream {
         ScancodeStream { _private: () }
     }
 }
+
+impl KeyboardHooks {
+    pub fn new() -> Self {
+        KeyboardHooks {
+            hooks: Vec::new()
+        }
+    }
+}
+
+lazy_static! {
+    pub static ref KEYBOARD_HOOKS: Mutex<KeyboardHooks> = Mutex::new(KeyboardHooks {
+        hooks: Vec::new(),
+    });
+}
+
 
 impl Stream for ScancodeStream {
     type Item = u8;
@@ -99,7 +128,16 @@ pub async fn print_keypresses() {
                         }
                     }
                     DecodedKey::RawKey(_key) => {
-                        //print!("{:?}", key),
+                        print!("{:?}", key);
+                        serial_println!("key {:#?}", key);
+
+                        serial_println!("HOOKS {:#?}", KEYBOARD_HOOKS.lock().hooks);
+
+
+                        for f in &*KEYBOARD_HOOKS.lock().hooks {
+                            serial_println!("func {:#?}", f);
+                            f();
+                        }
                     },
                 }
             }
@@ -119,4 +157,29 @@ fn rmvec(v: Vec<u8>) -> Vec<u8> {
     }
 
     buf
+}
+
+#[doc(hidden)]
+pub fn _register_hook(hook: fn()) {
+    // //KEYBOARD_HOOKS.lock().push(hook);
+
+    // KEYBOARD_HOOK_EXECUTOR.spawn(hook);
+
+    // // executor.spawn(Task::new(example_task()));
+    // // executor.spawn(Task::new(keyboard::print_keypresses()));
+    // KEYBOARD_HOOK_EXECUTOR.run();
+
+    serial_println!("Registering hook {:#?}", hook);
+
+    KEYBOARD_HOOKS.lock().hooks.push(hook);
+}
+
+#[macro_export]
+macro_rules! register_kb_hook {
+    //($item:item) => ($crate::task::keyboard::_register_hook($item));
+    ($item:expr) => {
+        $crate::serial_println!("Registering a hook");
+        $crate::task::keyboard::_register_hook($item);
+    }
+    
 }
