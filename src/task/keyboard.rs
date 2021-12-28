@@ -8,9 +8,6 @@ use futures_util::{
 use alloc::vec::Vec;
 use lazy_static::lazy_static;
 use spin::Mutex;
-use crate::task::{Task};
-use crate::task::executor::Executor; 
-
 
 use crate::println;
 use crate::shell::{pass_to_shell, prompt};

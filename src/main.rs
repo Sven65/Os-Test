@@ -4,6 +4,7 @@
 #![test_runner(test_os::test_runner)]
 #![reexport_test_harness_main = "test_main"]
 
+
 extern crate alloc;
 
 use test_os::{memory, println, allocator, register_kb_hook, serial_println};
@@ -17,6 +18,11 @@ use alloc::{boxed::Box, vec, vec::Vec, rc::Rc};
 use test_os::task::{Task, keyboard};
 use test_os::task::executor::Executor; 
 
+use vga::colors::{Color16, TextModeColor};
+use vga::writers::{ScreenCharacter, TextWriter, Text80x25};
+
+use test_os::vga_new::_print;
+
 entry_point!(kernel_main);
 
 async fn async_number() -> u32 {
@@ -29,13 +35,24 @@ fn kb_hook_cb() {
 
 async fn example_task() {
     let number = async_number().await;
-    println!("async number: {}", number);
+    //println!("async number: {}", number);
 }
 
 fn kernel_main(boot_info: &'static BootInfo) -> ! {
-    println!("Hello World{}", "!");
+    //println!("Hello World{}", "!");
 
     test_os::init();
+
+
+    _print("Hello World!");
+
+    // for (offset, character) in "Hello World! \x1b[32mA".chars().enumerate() {
+    //     serial_println!("Printing char {}", character);
+
+    //     let screen_char = ScreenCharacter::new(character as u8, color);
+
+    //     text_mode.write_character(1 + offset, 0, screen_char);
+    // }
     
     let phys_mem_offset = VirtAddr::new(boot_info.physical_memory_offset);
     let mut mapper = unsafe { memory::init(phys_mem_offset) };
@@ -53,8 +70,6 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
     register_kb_hook!(|| {
         serial_println!("Hello from hook");
     });
-
-    register_kb_hook!();
 
     register_kb_hook!(kb_hook_cb);
 

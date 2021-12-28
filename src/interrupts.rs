@@ -1,4 +1,4 @@
-use crate::{gdt, println, print, hlt_loop};
+use crate::{gdt, println, hlt_loop};
 use lazy_static::lazy_static;
 use x86_64::structures::idt::{InterruptDescriptorTable, InterruptStackFrame, PageFaultErrorCode};
 use pic8259::ChainedPics;

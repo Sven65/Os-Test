@@ -3,7 +3,7 @@ use core::fmt;
 use lazy_static::lazy_static;
 use spin::Mutex;
 use alloc::vec::Vec;
-use crate::vga::ansii::convert_ansii_to_color;
+use crate::vga_old::ansii::convert_ansii_to_color;
 use crate::{serial_println};
 
 #[allow(dead_code)]
@@ -184,7 +184,7 @@ impl fmt::Write for Writer {
 
 #[macro_export]
 macro_rules! print {
-    ($($arg:tt)*) => ($crate::vga::vga_buffer::_print(format_args!($($arg)*)));
+    ($($arg:tt)*) => ($crate::vga_old::vga_buffer::_print(format_args!($($arg)*)));
 }
 
 #[macro_export]

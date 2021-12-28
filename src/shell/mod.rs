@@ -1,8 +1,6 @@
 use alloc::vec::Vec;
-use alloc::string::String;
-use core::mem::transmute;
 use crate::{print, println, exit_qemu, QemuExitCode, serial_print, serial_println};
-use crate::vga::vga_buffer::{get_chars};
+use crate::vga_old::vga_buffer::{get_chars};
 use crate::time::get_time;
 use crate::util::bitfield::BitField;
 
@@ -70,6 +68,9 @@ pub fn pass_to_shell(v: Vec<u8>) {
 			serial_println!("Bit 1: {}", bf.get(1));
 			serial_println!("Value: {}", bf.get_value());
 		},
+		b"exit" => {
+			exit_qemu(QemuExitCode::Success);
+		}
 		_ => {},
 	}
 

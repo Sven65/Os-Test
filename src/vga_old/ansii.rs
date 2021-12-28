@@ -1,7 +1,7 @@
 use alloc::vec::Vec;
-use crate::vga::vga_buffer::{ColorCode, Color, WRITER, _print};
+use crate::vga_old::vga_buffer::{ColorCode, Color};
 use core::str::from_utf8;
-use crate::{print, println, serial_println};
+use crate::{serial_println};
 
 // TODO: Make this support light mode
 fn convert_code_to_color(color: &str) -> Color {

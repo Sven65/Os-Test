@@ -1,7 +1,5 @@
 // Mostly stolen from https://github.com/noahrinehart/cmos
 
-#![no_std]
-
 use x86_64::instructions::port::Port;
 
 use core::{
@@ -9,8 +7,6 @@ use core::{
 	fmt::{Display, Formatter, Result},
 	usize,
 };
-
-use crate::{print};
 
 /// The standard CMOS struct
 #[derive(Debug)]
