@@ -23,6 +23,8 @@ use vga::writers::{ScreenCharacter, TextWriter, Text80x25};
 
 use test_os::vga_new::_print;
 
+use test_os::new_print;
+
 entry_point!(kernel_main);
 
 async fn async_number() -> u32 {
@@ -35,16 +37,17 @@ fn kb_hook_cb() {
 
 async fn example_task() {
     let number = async_number().await;
-    //println!("async number: {}", number);
+    println!("async number: {}", number);
 }
 
 fn kernel_main(boot_info: &'static BootInfo) -> ! {
-    //println!("Hello World{}", "!");
+    println!("Hello World{}", "!");
 
     test_os::init();
 
 
-    _print("Hello World!");
+    // new_print!("Hello World!\nWeed!");
+    // new_print!("In publishing and graphic design, Lorem ipsum is a placeholder text commonly used to demonstrate the visual form of a document or a typeface without relying on meaningful content. Lorem ipsum may be used as a placeholder before the final copy is available");
 
     // for (offset, character) in "Hello World! \x1b[32mA".chars().enumerate() {
     //     serial_println!("Printing char {}", character);
