@@ -7,7 +7,7 @@
 
 extern crate alloc;
 
-use test_os::{memory, println, allocator, register_kb_hook, serial_println};
+use test_os::{memory, println, allocator, register_kb_hook, serial_println, serial_print};
 use core::panic::PanicInfo;
 use bootloader::{BootInfo, entry_point};
 
@@ -21,9 +21,10 @@ use test_os::task::executor::Executor;
 use vga::colors::{Color16, TextModeColor};
 use vga::writers::{ScreenCharacter, TextWriter, Text80x25};
 
-use test_os::vga_new::_print;
 
-use test_os::new_print;
+use test_os::fs::fat::RamFS;
+
+use test_os::fs::vfs::FsFunctions;
 
 entry_point!(kernel_main);
 
@@ -45,7 +46,6 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
 
     test_os::init();
 
-
     // new_print!("Hello World!\nWeed!");
     // new_print!("In publishing and graphic design, Lorem ipsum is a placeholder text commonly used to demonstrate the visual form of a document or a typeface without relying on meaningful content. Lorem ipsum may be used as a placeholder before the final copy is available");
 
@@ -65,6 +65,35 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
 
     allocator::init_heap(&mut mapper, &mut frame_allocator)
         .expect("heap initialization failed");
+
+    fs_root = initialise_initrd(0);
+
+    // list the contents of /
+    int i = 0;
+    struct dirent *node = 0;
+    while ( (node = readdir_fs(fs_root, i)) != 0) {
+        serial_print!("Found file ");
+        serial_print!("{}\n", node.name);
+        let fsnode = finddir_fs(fs_root, node.name);
+
+        if ((fsnode->flags&0x7) == FS_DIRECTORY)
+        {
+            serial_print!("\n\t(directory)\n");
+        }
+        else
+        {
+            serial_print("\n\t contents: \"");
+            char buf[256];
+            u32int sz = read_fs(fsnode, 0, 256, buf);
+            int j;
+            for (j = 0; j < sz; j++) {
+                serial_print(buf[j]);
+            }
+            
+            serial_print("\"\n");
+        }
+        i++;
+    }
 
     let mut executor = Executor::new();
     executor.spawn(Task::new(example_task()));
