@@ -142,6 +142,10 @@ impl Writer {
         }
     }
 
+    pub fn clear_color(&mut self) {
+        self.color_code = ColorCode::new(Color::White, Color::Black);
+    }
+
 	fn new_line(&mut self) {
         for row in 1..BUFFER_HEIGHT {
             for col in 0..BUFFER_WIDTH {
@@ -168,7 +172,7 @@ impl Writer {
 lazy_static! {
     pub static ref WRITER: Mutex<Writer> = Mutex::new(Writer {
         column_position: 0,
-        color_code: ColorCode::new(Color::Pink, Color::Black),
+        color_code: ColorCode::new(Color::White, Color::Black),
         buffer: unsafe { &mut *(0xb8000 as *mut Buffer) },
         is_escaped: false,
         color_buf: Vec::new(),
@@ -188,6 +192,11 @@ macro_rules! print {
 }
 
 #[macro_export]
+macro_rules! reset_color {
+    ($($arg:tt)*) => ($crate::vga_old::vga_buffer::_reset_color());
+}
+
+#[macro_export]
 macro_rules! println {
     () => ($crate::print!("\n"));
     ($($arg:tt)*) => ($crate::print!("{}\n", format_args!($($arg)*)));
@@ -200,6 +209,15 @@ pub fn _print(args: fmt::Arguments) {
 
     interrupts::without_interrupts(|| {
         WRITER.lock().write_fmt(args).unwrap();
+    });
+}
+
+#[doc(hidden)]
+pub fn _reset_color() {
+    use x86_64::instructions::interrupts;
+
+    interrupts::without_interrupts(|| {
+        WRITER.lock().clear_color();
     });
 }
 

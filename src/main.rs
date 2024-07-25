@@ -44,18 +44,6 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
     println!("Hello World{}", "!");
 
     test_os::init();
-
-
-    // new_print!("Hello World!\nWeed!");
-    // new_print!("In publishing and graphic design, Lorem ipsum is a placeholder text commonly used to demonstrate the visual form of a document or a typeface without relying on meaningful content. Lorem ipsum may be used as a placeholder before the final copy is available");
-
-    // for (offset, character) in "Hello World! \x1b[32mA".chars().enumerate() {
-    //     serial_println!("Printing char {}", character);
-
-    //     let screen_char = ScreenCharacter::new(character as u8, color);
-
-    //     text_mode.write_character(1 + offset, 0, screen_char);
-    // }
     
     let phys_mem_offset = VirtAddr::new(boot_info.physical_memory_offset);
     let mut mapper = unsafe { memory::init(phys_mem_offset) };
