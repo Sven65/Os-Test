@@ -85,6 +85,18 @@ pub fn pass_to_shell(v: Vec<u8>) {
 				"mem" => {
 					dump_memory(0x_4444_4444_0000, HEAP_KIB);
 				},
+				"ahci" => {
+					match find_ahci_controller() {
+						Some((_bus, _slot, _function, base_addr)) => {
+				
+							read_ahci_memory(base_addr, AHCI_MEMORY_SIZE);
+							
+						}
+						None => {
+							println!("No AHCI controller found");
+						}
+					}
+				}
 				&_ => {}
 			}
 		},

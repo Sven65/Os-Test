@@ -10,13 +10,12 @@ pub const AHCI_CONTROLLER_DRIVE_COUNT: usize = 6;
 pub const AHCI_CONTROLLER_MEMORY_PER_DRIVE: usize = 4096;
 pub const AHCI_MEMORY_SIZE: usize = AHCI_CONTROLLER_MEMORY_PER_DRIVE * AHCI_CONTROLLER_MEMORY_PER_DRIVE;
 
-const PORT_REG_BASE: u64 = 0x1000; // Example base offset for port registers
-const PORT_SIG_OFFSET: u32 = 0x20; // Signature register offset
-const PORT_CMD_OFFSET: u32 = 0x08; // Command register offset
-const PORT_CMD_ST: u32 = 0x0001; // Start bit in command register
-const PORT_SIG_SATA: u32 = 0x0000_0000; // SATA signature (adjust as needed)
-const PORT_COMMAND_REGISTER_OFFSET: u32 = 0x18;
-const PORT_DETECTED_MASK: u32 = 0x1; // Adjust as needed
+const PORT_REG_BASE: u64 = 0x1000; // Base offset for port registers
+const PORT_SIG_OFFSET: u32 = 0xA0; // Signature register offset
+const PORT_CMD_OFFSET: u32 = 0x00; // Command register offset
+const PORT_SIG_SATA: u32 = 0x00000101; // SATA signature
+const PORT_COMMAND_REGISTER_OFFSET: u32 = 0x18; // Command register offset
+const PORT_DETECTED_MASK: u32 = 0x1; // Device detected bit mask
 
 #[derive(Debug)]
 pub enum AhciError {
@@ -76,11 +75,10 @@ pub fn read_ahci_memory(base_address: u64, size: usize) {
 
     while addr < end {
         unsafe {
-            let value = read_volatile(addr as *const u8);
-            // Print value or handle as needed
-            serial_println!("0x{:X}: 0x{:02X}", addr, value);
+            let value = read_volatile(addr as *const u32); // Read as u32 to align with typical register size
+            serial_println!("0x{:X}: 0x{:08X}", addr, value);
         }
-        addr += 1;
+        addr += 4; // Increment by 4 bytes since we're reading u32
     }
 }
 
