@@ -1,10 +1,12 @@
+use core::ptr::read_volatile;
+
 use x86_64::{
-    structures::paging::{OffsetPageTable, PhysFrame, Size4KiB, FrameAllocator, PageTable},
-    VirtAddr,
-	PhysAddr,
+    structures::paging::{FrameAllocator, OffsetPageTable, PageTable, PhysFrame, Size4KiB}, PhysAddr, VirtAddr
 };
 
 use bootloader::bootinfo::{MemoryMap, MemoryRegionType};
+
+use crate::serial_println;
 
 /// A FrameAllocator that always returns `None`.
 pub struct EmptyFrameAllocator;
@@ -132,4 +134,25 @@ fn translate_addr_inner(addr: VirtAddr, physical_memory_offset: VirtAddr) -> Opt
 
     // calculate the physical address by adding the page offset
     Some(frame.start_address() + u64::from(addr.page_offset()))
+}
+
+pub fn dump_memory(start_addr: u64, size: usize) {
+    let end_addr = start_addr + size as u64;
+    let mut addr = start_addr;
+
+    while addr < end_addr {
+        unsafe {
+            let value = read_volatile(addr as *const u8);
+            // Print value to serial console
+            serial_println!("0x{:X}: 0x{:02X}", addr, value);
+        }
+        addr += 1;
+    }
+}
+
+pub fn test_memory_access(address: u64) -> u32 {
+    unsafe {
+        let reg_ptr = address as *const u32;
+        read_volatile(reg_ptr)
+    }
 }

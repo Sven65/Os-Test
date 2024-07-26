@@ -1,4 +1,4 @@
-use crate::{gdt, println, hlt_loop};
+use crate::{gdt, hlt_loop, println, serial_println};
 use lazy_static::lazy_static;
 use x86_64::structures::idt::{InterruptDescriptorTable, InterruptStackFrame, PageFaultErrorCode};
 use pic8259::ChainedPics;
@@ -94,6 +94,11 @@ extern "x86-interrupt" fn page_fault_handler(stack_frame: InterruptStackFrame, e
     println!("Accessed Address: {:?}", Cr2::read());
     println!("Error Code: {:?}", error_code);
     println!("{:#?}", stack_frame);
+
+    serial_println!("EXCEPTION: PAGE FAULT");
+    serial_println!("Accessed Address: {:?}", Cr2::read());
+    serial_println!("Error Code: {:?}", error_code);
+    serial_println!("{:#?}", stack_frame);
     hlt_loop();
 }
 

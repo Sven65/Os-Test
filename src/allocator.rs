@@ -14,11 +14,12 @@ pub mod bump;
 pub mod fixed_size_block;
 pub mod linked_list;
 
+pub const HEAP_KIB: usize = 4096;
 pub const HEAP_START: usize = 0x_4444_4444_0000;
-pub const HEAP_SIZE: usize = 4096 * 1024; // 2048 KiB
+pub const HEAP_SIZE: usize = HEAP_KIB * 1024; // 2048 KiB
 
 #[global_allocator]
-static ALLOCATOR: Locked<FixedSizeBlockAllocator> = Locked::new(FixedSizeBlockAllocator::new());
+pub static ALLOCATOR: Locked<FixedSizeBlockAllocator> = Locked::new(FixedSizeBlockAllocator::new());
 
 pub fn init_heap(
     mapper: &mut impl Mapper<Size4KiB>,

@@ -1,4 +1,4 @@
-use fatfs::{Error as FatError, File, FileSystem, FormatVolumeOptions, FsOptions, IoBase, Read, Seek, SeekFrom, Write};
+use fatfs::{Error as FatError, FileSystem, FormatVolumeOptions, FsOptions, IoBase, Read, Seek, SeekFrom, Write};
 use lazy_static::lazy_static;
 use spin::Mutex;
 

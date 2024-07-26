@@ -1,12 +1,17 @@
-use alloc::vec::{self, Vec};
+use alloc::borrow::ToOwned;
+use alloc::vec::Vec;
 use alloc::string::{String, ToString};
-use crate::fs::{create_filesystem, RamStorage, FILE_SYSTEM};
+use fatfs::{Read, Write};
+use crate::allocator::HEAP_KIB;
+use crate::device::ahci::{find_ahci_controller, find_sata_devices, read_ahci_memory, AHCI_MEMORY_SIZE};
+use crate::device::get_all_devices;
+use crate::fs::FILE_SYSTEM;
+use crate::memory::{dump_memory, test_memory_access};
+use crate::vga_old::vga_buffer::get_chars;
 use crate::{exit_qemu, print, println, reset_color, serial_print, serial_println, QemuExitCode};
-use crate::vga_old::vga_buffer::{get_chars};
 use crate::time::get_time;
 use crate::util::bitfield::BitField;
 use core::str;
-use fatfs::{File, FileSystem, FsOptions, Read, Write};
 
 use oorandom::Rand32;
 // use crate::vga::vga_buffer::Color;
@@ -53,6 +58,36 @@ pub fn pass_to_shell(v: Vec<u8>) {
 	
 	match &*command {
 		b"help" => print!("This is a help command"),
+		b"devices" => {
+			get_all_devices();
+		},
+		b"raddr" => {
+			let addr = &args[0];
+			let addr = u64::from_str_radix(addr.as_str(), 16).expect("Failed to convert addr");
+			test_memory_access(addr);
+		},
+		b"ahci" => {
+			match find_ahci_controller() {
+				Some((_bus, _slot, _function, base_addr)) => {
+		
+					find_sata_devices(base_addr);
+					
+				}
+				None => {
+					println!("No AHCI controller found");
+				}
+			}
+		},
+		b"dump" => {
+			let dumptype = &args[0];
+
+			match dumptype.as_str() {
+				"mem" => {
+					dump_memory(0x_4444_4444_0000, HEAP_KIB);
+				},
+				&_ => {}
+			}
+		},
 		b"param" => {
 			print!("Got args {:#?}", args);
 		},

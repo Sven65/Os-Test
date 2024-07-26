@@ -7,23 +7,17 @@
 
 extern crate alloc;
 
+use test_os::device::ahci::{find_ahci_controller, map_ahci_memory};
 use test_os::{memory, println, allocator, register_kb_hook, serial_println};
 use core::panic::PanicInfo;
 use bootloader::{BootInfo, entry_point};
 
 use test_os::memory::BootInfoFrameAllocator;
-use x86_64::{structures::paging::Page, VirtAddr};
-use alloc::{boxed::Box, vec, vec::Vec, rc::Rc};
+use x86_64::VirtAddr;
 
 use test_os::task::{Task, keyboard};
 use test_os::task::executor::Executor; 
 
-use vga::colors::{Color16, TextModeColor};
-use vga::writers::{ScreenCharacter, TextWriter, Text80x25};
-
-use test_os::vga_new::_print;
-
-use test_os::new_print;
 
 entry_point!(kernel_main);
 
@@ -41,7 +35,7 @@ async fn example_task() {
 }
 
 fn kernel_main(boot_info: &'static BootInfo) -> ! {
-    println!("Hello World{}", "!");
+    println!("Please wait, booting...");
 
     test_os::init();
     
@@ -50,6 +44,25 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
     let mut frame_allocator = unsafe {
         BootInfoFrameAllocator::init(&boot_info.memory_map)
     };
+
+    match find_ahci_controller() {
+        Some((bus, slot, function, base_addr)) => {
+            serial_println!("Found AHCI controller at bus {}, slot {}, function {}", bus, slot, function);
+
+            match map_ahci_memory(&mut mapper, &mut frame_allocator, base_addr) {
+                Ok(_) => {
+                    serial_println!("Mapped AHCI memory");
+                },
+                Err(e) => {
+                    serial_println!("Failed to map AHCI memory: {:#?}", e);
+                }
+            }
+        }
+        None => {
+            println!("No AHCI controller found");
+        }
+    }
+
 
     allocator::init_heap(&mut mapper, &mut frame_allocator)
         .expect("heap initialization failed");
@@ -66,11 +79,6 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
 
     executor.run();
 
-
-    
-
-    #[cfg(test)]
-    test_main();
 
     println!("No crashes, woo!");
     test_os::hlt_loop();
