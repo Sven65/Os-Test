@@ -7,7 +7,7 @@
 
 extern crate alloc;
 
-use test_os::device::ahci::{find_ahci_controller, map_ahci_memory};
+use test_os::device::ahci::{find_ahci_controller, initialize_ahci_controller, map_ahci_memory};
 use test_os::{memory, println, allocator, register_kb_hook, serial_println};
 use core::panic::PanicInfo;
 use bootloader::{BootInfo, entry_point};
@@ -38,6 +38,9 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
     println!("Please wait, booting...");
 
     test_os::init();
+
+    println!("Please wait, mapping memory...");
+
     
     let phys_mem_offset = VirtAddr::new(boot_info.physical_memory_offset);
     let mut mapper = unsafe { memory::init(phys_mem_offset) };
@@ -45,13 +48,23 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
         BootInfoFrameAllocator::init(&boot_info.memory_map)
     };
 
+    println!("Please wait, checking for AHCI...");
+
     match find_ahci_controller() {
         Some((bus, slot, function, base_addr)) => {
-            serial_println!("Found AHCI controller at bus {}, slot {}, function {}", bus, slot, function);
+            let base_addr = 0xfebf1000;
+            serial_println!("Found AHCI controller at bus {}, slot {}, function {}. base addr is {}", bus, slot, function, base_addr);
+
+            println!("Please wait, mapping AHCI memory...");
+
 
             match map_ahci_memory(&mut mapper, &mut frame_allocator, base_addr) {
                 Ok(_) => {
                     serial_println!("Mapped AHCI memory");
+                    match initialize_ahci_controller(base_addr) {
+                        Ok(_) => { serial_println!("Initialized AHCI controller"); }
+                        Err(e) => { serial_println!("Failed to initialize AHCI controller: {:#?}", e); }
+                    }
                 },
                 Err(e) => {
                     serial_println!("Failed to map AHCI memory: {:#?}", e);
@@ -63,6 +76,7 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
         }
     }
 
+    println!("Please wait, mapping heap...");
 
     allocator::init_heap(&mut mapper, &mut frame_allocator)
         .expect("heap initialization failed");

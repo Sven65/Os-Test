@@ -47,6 +47,7 @@ features = ["alloc"]
 
 [package.metadata.bootimage]
 test-args = [
+	"-m", "2048",
 	"-device", "isa-debug-exit,iobase=0xf4,iosize=0x04", "-serial", "stdio",
 	"-display", "none",
 	"-drive", "id=disk,file=data.img,format=qcow2,if=none",
@@ -54,10 +55,13 @@ test-args = [
 	"-device", "ide-hd,drive=disk,bus=ahci.0"
 ]
 run-args = [
+	"-m", "2048",
 	"-serial", "stdio",
-	"-drive", "id=disk,file=data.img,format=qcow2,if=none",
-	"-device", "ahci,id=ahci",
-	"-device", "ide-hd,drive=disk,bus=ahci.0"
+	"-vga", "std",
+	"-drive", "id=drive0,file=data.img,format=qcow2,if=none",
+	"-monitor", "telnet:127.0.0.1:1234,server,nowait",
+	"-device", "ich9-ahci,id=ahci",
+	"-device", "ide-hd,drive=drive0,bus=ahci.0"
 ]
 test-success-exit-code = 33         # (0x10 << 1) | 1
 

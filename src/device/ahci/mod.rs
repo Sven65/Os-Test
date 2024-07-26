@@ -6,16 +6,37 @@ use crate::serial_println;
 
 use super::pci_config_read;
 
+// pub const AHCI_CONTROLLER_DRIVE_COUNT: usize = 6;
+// pub const AHCI_CONTROLLER_MEMORY_PER_DRIVE: usize = 0x1000;
+// const ADDITIONAL_SPACE: usize = 0x1000; // Example additional space
+// pub const AHCI_MEMORY_SIZE: usize = AHCI_CONTROLLER_MEMORY_PER_DRIVE * AHCI_CONTROLLER_MEMORY_PER_DRIVE;
+
 pub const AHCI_CONTROLLER_DRIVE_COUNT: usize = 6;
 pub const AHCI_CONTROLLER_MEMORY_PER_DRIVE: usize = 4096;
-pub const AHCI_MEMORY_SIZE: usize = AHCI_CONTROLLER_MEMORY_PER_DRIVE * AHCI_CONTROLLER_MEMORY_PER_DRIVE;
+pub const AHCI_MEMORY_SIZE: usize = AHCI_CONTROLLER_DRIVE_COUNT * AHCI_CONTROLLER_MEMORY_PER_DRIVE; // Adjusted total size for AHCI controller
+
+const PORT_COMMAND_REGISTER_OFFSET: u32 = 0x04; // Command register offset
+const PORT_DETECTED_MASK: u32 = 0x1; // Mask for detecting a device
+
+const AHCI_CTRL_OFFSET: u32 = 0x00; // Controller offset
+const AHCI_IS_OFFSET: u32 = 0x08; // Interrupt Status
+const AHCI_PI_OFFSET: u32 = 0x0C; // Port Implementation
+
+const AHCI_PI_MASK: u32 = 0x0000003F; // Port Implemented Mask
+
+
+const DELAY_COUNT: u64 = 10000000000;
+
+const AHCI_CAP_OFFSET: u64 = 0x00; // Capability register offset
+const AHCI_GHC_OFFSET: u64 = 0x04; // Global Host Control register offset
+const AHCI_GHC_AE: u32 = 0x0001; // AHCI Enable bit
+const AHCI_GHC_HR: u32 = 0x8000; // Host Reset bit
 
 const PORT_REG_BASE: u64 = 0x1000; // Base offset for port registers
 const PORT_SIG_OFFSET: u32 = 0xA0; // Signature register offset
-const PORT_CMD_OFFSET: u32 = 0x00; // Command register offset
-const PORT_SIG_SATA: u32 = 0x00000101; // SATA signature
-const PORT_COMMAND_REGISTER_OFFSET: u32 = 0x18; // Command register offset
-const PORT_DETECTED_MASK: u32 = 0x1; // Device detected bit mask
+const PORT_CMD_OFFSET: u32 = 0x08; // Command register offset
+const PORT_CMD_ST: u32 = 0x0001; // Start bit in command register
+const PORT_SIG_SATA: u32 = 0x00000101; // SATA signature (adjust as needed)
 
 #[derive(Debug)]
 pub enum AhciError {
@@ -25,7 +46,15 @@ pub enum AhciError {
     DeviceNotFound,
     InvalidSignature,
     InvalidMemoryAddress,
+    PortInitializationFailed,
 }
+
+pub fn get_ahci_base_address() -> Option<u64> {
+    let pci_base_address = 0xfebf1000; // Use the address from your `info pci` output
+    Some(pci_base_address)
+}
+
+
 
 
 // Scanning the PCI bus for AHCI controllers
@@ -69,6 +98,15 @@ pub fn map_ahci_memory(mapper: &mut impl Mapper<Size4KiB>, frame_allocator: &mut
 }
 
 
+fn interpret_port_signature(sig: u32) -> &'static str {
+    match sig {
+        0x00000101 => "SATA Device",
+        0xEB140101 => "ATAPI Device",
+        0x00008000 => "SCSI Device",
+        _ => "Unknown or Non-SATA Device",
+    }
+}
+
 pub fn read_ahci_memory(base_address: u64, size: usize) {
     let mut addr = base_address;
     let end = base_address + size as u64;
@@ -82,28 +120,20 @@ pub fn read_ahci_memory(base_address: u64, size: usize) {
     }
 }
 
-
-fn ahci_register_read(base_address: u64, offset: u32) -> u32 {
-    unsafe {
-        let reg_ptr = (base_address + offset as u64) as *const u32;
-        read_volatile(reg_ptr)
-    }
-}
-
-fn ahci_register_write(base_address: u64, offset: u32, value: u32) {
-    unsafe {
-        let reg_ptr = (base_address + offset as u64) as *mut u32;
-        write_volatile(reg_ptr, value);
-    }
-}
-
 fn read_port_register(base_address: u64, port: usize, offset: u32) -> Result<u32, AhciError> {
+    // Calculate the address of the port register
     let register_address = base_address + (port as u64 * 0x1000) + offset as u64;
-
-    if register_address < 0x100000000 && register_address > 0x00000000 {
+    
+    // Debug print to verify address calculation
+    serial_println!("Reading port register at address: 0x{:X}", register_address);
+    
+    // Ensure the address is within a reasonable range
+    if register_address < 0x100000000 && register_address >= base_address {
         unsafe {
             let reg_ptr = register_address as *const u32;
             let value = read_volatile(reg_ptr);
+            // Debug print to verify value read
+            serial_println!("Read value: 0x{:X}", value);
             Ok(value)
         }
     } else {
@@ -119,6 +149,85 @@ fn is_device_present(base_address: u64, port: usize) -> Result<bool, AhciError> 
     Ok((port_command & PORT_DETECTED_MASK) != 0)
 }
 
+fn ahci_register_read(base_address: u64, offset: u64) -> Result<u32, AhciError> {
+    unsafe {
+        let reg_ptr = (base_address + offset as u64) as *const u32;
+        if reg_ptr.is_null() {
+            return Err(AhciError::InvalidMemoryAddress);
+        }
+        let value = read_volatile(reg_ptr);
+        Ok(value)
+    }
+}
+
+fn ahci_register_write(base_address: u64, offset: u64, value: u32) -> Result<(), AhciError> {
+    unsafe {
+        let reg_ptr = (base_address + offset as u64) as *mut u32;
+        if reg_ptr.is_null() {
+            return Err(AhciError::InvalidMemoryAddress);
+        }
+        write_volatile(reg_ptr, value);
+        Ok(())
+    }
+}
+
+fn busy_wait(count: u64) {
+    let mut i = 0;
+    while i < count {
+        i += 1;
+    }
+}
+
+pub fn initialize_ahci_controller(base_address: u64) -> Result<(), AhciError> {
+    // Read and print the CAP register
+    let cap = ahci_register_read(base_address, AHCI_CAP_OFFSET)?;
+    serial_println!("CAP register: 0x{:08X}", cap);
+
+    // Read the Global Host Control register
+    let mut ghc = ahci_register_read(base_address, AHCI_GHC_OFFSET)?;
+    serial_println!("GHC before reset: 0x{:08X}", ghc);
+
+    // Set the AHCI Enable bit and reset the controller
+    ghc |= AHCI_GHC_AE | AHCI_GHC_HR;
+    match ahci_register_write(base_address, AHCI_GHC_OFFSET, ghc) {
+        Ok(_)  => {
+            // Wait for the reset bit to clear
+            serial_println!("Waiting for reset...");
+            let mut attempts = 0;
+            const MAX_ATTEMPTS: u32 = 10000; // Maximum number of attempts
+
+            while attempts < MAX_ATTEMPTS {
+                ghc = ahci_register_read(base_address, AHCI_GHC_OFFSET)?;
+                // serial_println!("GHC: 0x{:08X}", ghc);
+
+                if (ghc & AHCI_GHC_HR) == 0 {
+                    serial_println!("Reset completed.");
+                    break;
+                }
+
+                busy_wait(100000); // Delay between checks
+                attempts += 1;
+            }
+
+            if attempts == MAX_ATTEMPTS {
+                return Err(AhciError::RegisterReadError); // Reset did not complete
+            }
+
+            serial_println!("GHC after reset: 0x{:08X}", ahci_register_read(base_address, AHCI_GHC_OFFSET)?);
+
+            // Additional initialization steps if needed
+            // Example: Set the Port Command Register
+
+            return Ok(())
+        },
+        Err(e) => { serial_println!("Failed to write GHC offset: {:#?}", e); }
+    }
+
+    
+    Ok(())
+    
+}
+
 pub fn find_sata_devices(base_address: u64) {
     const MAX_PORTS: usize = AHCI_CONTROLLER_DRIVE_COUNT; // Number of ports (adjust as needed)
 
@@ -127,6 +236,7 @@ pub fn find_sata_devices(base_address: u64) {
         match read_port_register(base_address, port, PORT_SIG_OFFSET) {
             Ok(sig) => {
                 serial_println!("Sig for port {} is {}", port, sig);
+                serial_println!("Drive in port {} is {}", port, interpret_port_signature(sig));
                 if sig == PORT_SIG_SATA {        
                     // Optional: Further interrogation to gather more details
                     match read_port_register(base_address, port, PORT_CMD_OFFSET) {
