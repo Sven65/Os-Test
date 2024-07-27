@@ -2,7 +2,7 @@ use core::ptr::{read_volatile, write_volatile};
 
 use x86_64::{structures::paging::{mapper::MapToError, FrameAllocator, Mapper, Page, PageTableFlags, Size4KiB}, VirtAddr};
 
-use crate::serial_println;
+use crate::{serial_print, serial_println};
 
 use super::pci_config_read;
 
@@ -24,13 +24,12 @@ const AHCI_PI_OFFSET: u32 = 0x0C; // Port Implementation
 
 const AHCI_PI_MASK: u32 = 0x0000003F; // Port Implemented Mask
 
-
-const DELAY_COUNT: u64 = 10000000000;
+const DELAY_COUNT: u64 = 100_000_000;
 
 const AHCI_CAP_OFFSET: u64 = 0x00; // Capability register offset
 const AHCI_GHC_OFFSET: u64 = 0x04; // Global Host Control register offset
-const AHCI_GHC_AE: u32 = 0x0001; // AHCI Enable bit
-const AHCI_GHC_HR: u32 = 0x8000; // Host Reset bit
+const AHCI_GHC_AE: u32 = (1 << 31); // AHCI Enable bit
+const AHCI_GHC_HR: u32 = 0x01; // Host Reset bit
 
 const PORT_REG_BASE: u64 = 0x1000; // Base offset for port registers
 const PORT_SIG_OFFSET: u32 = 0xA0; // Signature register offset
@@ -70,51 +69,46 @@ impl AhciController {
         }
     }
 
+    fn read_shit(&self) {
+
+    }
+
     pub fn initialize(&self) -> Result<(), AhciError> {
-        let base_address = self.base_address;
+        let ahci_base = self.base_address as *mut u32;
 
-        serial_println!("Initializing AHCI controller at base address: 0x{:X}", base_address);
-
-        // Read and print the CAP register
-        let cap = ahci_register_read(base_address, AHCI_CAP_OFFSET)?;
-        serial_println!("CAP register: 0x{:08X}", cap);
-
-        // Read the Global Host Control register
-        let mut ghc = ahci_register_read(base_address, AHCI_GHC_OFFSET)?;
-        serial_println!("GHC before reset: 0x{:08X}", ghc);
-
-        // Set the AHCI Enable bit and reset the controller
-        ghc |= AHCI_GHC_AE | AHCI_GHC_HR;
-        ahci_register_write(base_address, AHCI_GHC_OFFSET, ghc)?;
-
-        // Wait for the reset bit to clear
-        serial_println!("Waiting for reset...");
+        //offset 0x04 = ghc reg
+        let ghc = unsafe { ahci_base.add(0x04 / 4) }; //global host control reg offset
+    
+        //read current val of ghc reg
+        let current_ghc_value = unsafe { ghc.read_volatile() };
+        serial_println!("pre-reset ghc val: {:#010x}", current_ghc_value);
+    
+        //write 0x80000001 to the ghc reg to init reset
+        unsafe { ghc.write_volatile(0x80000001) };
+    
+        // read the val to confirm
+        let new_ghc_value = unsafe { ghc.read_volatile() };
+        serial_println!("new ghc val: {:#010x}", new_ghc_value);
+    
+        // poll until hr bit (0th bit) is cleared
+    
         let mut attempts = 0;
-        const MAX_ATTEMPTS: u32 = 10000; // Maximum number of attempts
-
-        while attempts < MAX_ATTEMPTS {
-            ghc = ahci_register_read(base_address, AHCI_GHC_OFFSET)?;
-            if (ghc & AHCI_GHC_HR) == 0 {
-                serial_println!("Reset completed.");
-                break;
-            }
-
-            busy_wait(1000); // Delay between checks
-            attempts += 1;
-        }
-
-        if attempts == MAX_ATTEMPTS {
-            serial_println!("Reset did not complete.");
-            return Err(AhciError::RegisterReadError); // Reset did not complete
-        }
-
-        serial_println!("GHC after reset: 0x{:08X}", ahci_register_read(base_address, AHCI_GHC_OFFSET)?);
-
-        // Apply Intel PCS Quirk if necessary
-        if self.hflags & AHCI_HFLAG_INTEL_PCS_QUIRK != 0 {
-            self.apply_intel_pcs_quirk()?;
-        }
-
+        let addr: u32 = 0xFEBB1004;
+    
+        
+        let value = unsafe {read_volatile(addr as *const u8) };
+        serial_println!("read 0x{:X}: 0x{:08X} ", addr, value);
+    
+        if value & 0x00000001 == 0 {
+            serial_println!("Init WORKED!!!");
+        } else {}
+    
+        let val = ahci_register_read(self.base_address, 0x04);
+    
+        serial_println!("new val is {:#010x}", val.unwrap());
+    
+        serial_println!("reset worked :D");
+    
         Ok(())
     }
 
@@ -144,6 +138,8 @@ pub enum AhciError {
     InvalidSignature,
     InvalidMemoryAddress,
     PortInitializationFailed,
+    AeBitNotSet,
+    GhcBitNotSet,
 }
 
 pub fn get_ahci_base_address() -> Option<u64> {
@@ -211,11 +207,20 @@ pub fn read_ahci_memory(base_address: u64, size: usize) {
     let end = base_address + size as u64;
 
     while addr < end {
-        unsafe {
-            let value = read_volatile(addr as *const u32); // Read as u32 to align with typical register size
-            serial_println!("0x{:X}: 0x{:08X}", addr, value);
+        while addr < end {
+            unsafe {
+                let value = read_volatile(addr as *const u8);
+                // Print address and value
+                serial_print!("0x{:X}: 0x{:08X} ", addr, value);
+            }
+            
+            addr += 4;
+    
+            // Print a new line every 16 bytes for better readability
+            if (addr - base_address) % 16 == 0 {
+                let _ = serial_println!("");
+            }
         }
-        addr += 4; // Increment by 4 bytes since we're reading u32
     }
 }
 
@@ -261,7 +266,7 @@ fn ahci_register_read(base_address: u64, offset: u64) -> Result<u32, AhciError> 
 
 fn ahci_register_write(base_address: u64, offset: u64, value: u32) -> Result<(), AhciError> {
     unsafe {
-        let reg_ptr = (base_address + offset as u64) as *mut u32;
+        let reg_ptr = (base_address + offset) as *mut u32;
         if reg_ptr.is_null() {
             return Err(AhciError::InvalidMemoryAddress);
         }
@@ -277,6 +282,7 @@ fn busy_wait(count: u64) {
     }
 }
 
+
 pub fn initialize_ahci_controller(base_address: u64) -> Result<AhciController, AhciError> {
     let ahci_controller = AhciController::new(
         base_address,
@@ -290,6 +296,8 @@ pub fn initialize_ahci_controller(base_address: u64) -> Result<AhciController, A
 
     Ok(ahci_controller)
 }
+
+
 
 pub fn find_sata_devices(base_address: u64) {
     const MAX_PORTS: usize = AHCI_CONTROLLER_DRIVE_COUNT; // Number of ports (adjust as needed)

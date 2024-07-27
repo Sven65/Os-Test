@@ -52,8 +52,8 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
 
     match find_ahci_controller() {
         Some((bus, slot, function, base_addr)) => {
-            let base_addr = 0xfebf1000;
-            serial_println!("Found AHCI controller at bus {}, slot {}, function {}. base addr is {}", bus, slot, function, base_addr);
+            let base_addr = 0xFEBB1000;
+            serial_println!("Found AHCI controller at bus {}, slot {}, function {}. base addr is {:#X}", bus, slot, function, base_addr);
 
             println!("Please wait, mapping AHCI memory...");
 

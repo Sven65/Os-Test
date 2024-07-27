@@ -6,7 +6,7 @@ use x86_64::{
 
 use bootloader::bootinfo::{MemoryMap, MemoryRegionType};
 
-use crate::serial_println;
+use crate::{serial_print, serial_println};
 
 /// A FrameAllocator that always returns `None`.
 pub struct EmptyFrameAllocator;
@@ -143,10 +143,16 @@ pub fn dump_memory(start_addr: u64, size: usize) {
     while addr < end_addr {
         unsafe {
             let value = read_volatile(addr as *const u8);
-            // Print value to serial console
-            serial_println!("0x{:X}: 0x{:02X}", addr, value);
+            // Print address and value
+            let _ = serial_print!("{:08X}: {:02X} ", addr, value);
         }
+        
         addr += 1;
+
+        // Print a new line every 16 bytes for better readability
+        if (addr - start_addr) % 16 == 0 {
+            let _ = serial_println!("");
+        }
     }
 }
 
