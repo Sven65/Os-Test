@@ -7,7 +7,7 @@
 
 extern crate alloc;
 
-use test_os::device::ahci::{find_ahci_controller, initialize_ahci_controller, map_ahci_memory};
+use test_os::device::ahci::{find_ahci_controller, initialize_ahci_controller, map_ahci_memory, AHCI_MEMORY_SIZE};
 use test_os::{memory, println, allocator, register_kb_hook, serial_println};
 use core::panic::PanicInfo;
 use bootloader::{BootInfo, entry_point};
@@ -58,11 +58,11 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
             println!("Please wait, mapping AHCI memory...");
 
 
-            match map_ahci_memory(&mut mapper, &mut frame_allocator, base_addr) {
+            match map_ahci_memory(&mut mapper, &mut frame_allocator, base_addr, AHCI_MEMORY_SIZE) {
                 Ok(_) => {
                     serial_println!("Mapped AHCI memory");
                     match initialize_ahci_controller(base_addr) {
-                        Ok(_) => { serial_println!("Initialized AHCI controller"); }
+                        Ok(controller) => { serial_println!("Initialized AHCI controller {:#?}", controller); }
                         Err(e) => { serial_println!("Failed to initialize AHCI controller: {:#?}", e); }
                     }
                 },
