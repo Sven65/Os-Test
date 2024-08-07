@@ -1,3 +1,5 @@
+pub mod scsifs;
+
 use fatfs::{Error as FatError, FileSystem, FormatVolumeOptions, FsOptions, IoBase, Read, Seek, SeekFrom, Write};
 use lazy_static::lazy_static;
 use spin::Mutex;

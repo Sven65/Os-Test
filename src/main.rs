@@ -8,6 +8,8 @@
 extern crate alloc;
 
 use test_os::device::ahci::{find_ahci_controller, initialize_ahci_controller, map_ahci_memory, AHCI_MEMORY_SIZE};
+use test_os::device::scsi::{find_scsi_controller, get_block_info, initialize_virtio_scsi};
+use test_os::fs::scsifs::create_fs;
 use test_os::{memory, println, allocator, register_kb_hook, serial_println};
 use core::panic::PanicInfo;
 use bootloader::{BootInfo, entry_point};
@@ -73,6 +75,34 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
         }
         None => {
             println!("No AHCI controller found");
+        }
+    }
+
+    println!("[SCSI] Please wait, checking for SCSI");
+    match find_scsi_controller() {
+        Some((bus, slot, function, base_addr)) => {
+            serial_println!("Found SCSI controller at bus {}, slot {}, function {}. base addr is {:#X}", bus, slot, function, base_addr);
+
+            println!("[SCSI] Please wait, initializing SCSI.");
+
+            initialize_virtio_scsi(base_addr, &mut mapper, &mut frame_allocator);
+
+            println!("[SCSI] Creating FS");
+
+        //    for i in 0..0xfff {
+        //         serial_println!("===[ Trying offset {:#x} ]===", i);
+                let (block_size, num_blocks) = get_block_info(base_addr);
+
+                match create_fs(base_addr, block_size) {
+                    Ok(_) => {println!("Created FS"); },
+                    Err(e) => {serial_println!("Failed to create FS {:#?}", e); }
+                }
+
+
+        //    }
+        }
+        None => {
+            println!("[SCSI] No SCSI controller found");
         }
     }
 

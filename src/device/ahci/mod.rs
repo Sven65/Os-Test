@@ -69,46 +69,44 @@ impl AhciController {
         }
     }
 
-    fn read_shit(&self) {
-
-    }
-
     pub fn initialize(&self) -> Result<(), AhciError> {
-        let ahci_base = self.base_address as *mut u32;
+        // Read the CAP register
+        let cap = ahci_register_read(self.base_address, 0x00)?;
+        serial_println!("CAP register: 0x{:08X}", cap);
 
-        //offset 0x04 = ghc reg
-        let ghc = unsafe { ahci_base.add(0x04 / 4) }; //global host control reg offset
-    
-        //read current val of ghc reg
-        let current_ghc_value = unsafe { ghc.read_volatile() };
-        serial_println!("pre-reset ghc val: {:#010x}", current_ghc_value);
-    
-        //write 0x80000001 to the ghc reg to init reset
-        unsafe { ghc.write_volatile(0x80000001) };
-    
-        // read the val to confirm
-        let new_ghc_value = unsafe { ghc.read_volatile() };
-        serial_println!("new ghc val: {:#010x}", new_ghc_value);
-    
-        // poll until hr bit (0th bit) is cleared
-    
+        // Read the Global Host Control register
+        let mut ghc = ahci_register_read(self.base_address, 0x04)?;
+        serial_println!("GHC before reset: 0x{:08X}", ghc);
+
+        // Set the AHCI Enable bit and reset the controller
+        ghc |= AHCI_GHC_AE | AHCI_GHC_HR; // AHCI Enable and Host Reset bits
+        ahci_register_write(self.base_address, 0x04, ghc)?;
+
+        // Wait for the reset bit to clear
+        serial_println!("Waiting for reset...");
         let mut attempts = 0;
-        let addr: u32 = 0xFEBB1004;
-    
+        const MAX_ATTEMPTS: u32 = 10000; // Maximum number of attempts
+
+        while attempts < MAX_ATTEMPTS {
+            ghc = ahci_register_read(self.base_address, 0x04)?;
+            if (ghc & AHCI_GHC_AE) == 0 {
+                serial_println!("Reset completed.");
+                break;
+            }
+            busy_wait(10000); // Delay between checks
+            attempts += 1;
+        }
+
+        if attempts == MAX_ATTEMPTS {
+            serial_println!("Reset did not complete.");
         
-        let value = unsafe {read_volatile(addr as *const u8) };
-        serial_println!("read 0x{:X}: 0x{:08X} ", addr, value);
-    
-        if value & 0x00000001 == 0 {
-            serial_println!("Init WORKED!!!");
-        } else {}
-    
-        let val = ahci_register_read(self.base_address, 0x04);
-    
-        serial_println!("new val is {:#010x}", val.unwrap());
-    
-        serial_println!("reset worked :D");
-    
+            serial_println!("GHC after failed reset: 0x{:08X}", ahci_register_read(self.base_address, 0x04)?);
+            
+            return Err(AhciError::RegisterReadError); // Reset did not complete
+        }
+            
+        serial_println!("GHC after reset: 0x{:08X}", ahci_register_read(self.base_address, 0x04)?);
+
         Ok(())
     }
 
@@ -293,6 +291,13 @@ pub fn initialize_ahci_controller(base_address: u64) -> Result<AhciController, A
     );
 
     ahci_controller.initialize()?;
+
+    // busy_wait(100_000);
+
+    // let val = ahci_register_read(base_address, 0x04);
+
+    
+    // serial_println!("new val after init is {:#010x}", val.unwrap());
 
     Ok(ahci_controller)
 }
