@@ -1,6 +1,7 @@
 pub mod ahci;
 pub mod scsi;
 pub mod virtq;
+pub mod virtio;
 
 use x86_64::instructions::port::Port;
 

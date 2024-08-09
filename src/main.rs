@@ -9,6 +9,7 @@ extern crate alloc;
 
 use test_os::device::ahci::{find_ahci_controller, initialize_ahci_controller, map_ahci_memory, AHCI_MEMORY_SIZE};
 use test_os::device::scsi::{find_scsi_controller, get_block_info, initialize_virtio_scsi};
+use test_os::device::virtio::enumerate_pci;
 use test_os::fs::scsifs::create_fs;
 use test_os::{memory, println, allocator, register_kb_hook, serial_println};
 use core::panic::PanicInfo;
@@ -20,6 +21,8 @@ use x86_64::VirtAddr;
 use test_os::task::{Task, keyboard};
 use test_os::task::executor::Executor; 
 
+
+const MMCONFIG_BASE: usize = 0xB000_0000;
 
 entry_point!(kernel_main);
 
@@ -79,32 +82,34 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
     }
 
     println!("[SCSI] Please wait, checking for SCSI");
-    match find_scsi_controller() {
-        Some((bus, slot, function, base_addr)) => {
-            serial_println!("Found SCSI controller at bus {}, slot {}, function {}. base addr is {:#X}", bus, slot, function, base_addr);
+    // match find_scsi_controller() {
+    //     Some((bus, slot, function, base_addr)) => {
+    //         serial_println!("Found SCSI controller at bus {}, slot {}, function {}. base addr is {:#X}", bus, slot, function, base_addr);
 
-            println!("[SCSI] Please wait, initializing SCSI.");
+    //         println!("[SCSI] Please wait, initializing SCSI.");
 
-            initialize_virtio_scsi(base_addr, &mut mapper, &mut frame_allocator);
+    //         initialize_virtio_scsi(base_addr, &mut mapper, &mut frame_allocator);
 
-            println!("[SCSI] Creating FS");
+    //         println!("[SCSI] Creating FS");
 
-        //    for i in 0..0xfff {
-        //         serial_println!("===[ Trying offset {:#x} ]===", i);
-                let (block_size, num_blocks) = get_block_info(base_addr);
+    //     //    for i in 0..0xfff {
+    //     //         serial_println!("===[ Trying offset {:#x} ]===", i);
+    //             let (block_size, num_blocks) = get_block_info(base_addr);
 
-                match create_fs(base_addr, block_size) {
-                    Ok(_) => {println!("Created FS"); },
-                    Err(e) => {serial_println!("Failed to create FS {:#?}", e); }
-                }
+    //             // match create_fs(base_addr, 512) {
+    //             //     Ok(_) => {println!("Created FS"); },
+    //             //     Err(e) => {serial_println!("Failed to create FS {:#?}", e); }
+    //             // }
 
 
-        //    }
-        }
-        None => {
-            println!("[SCSI] No SCSI controller found");
-        }
-    }
+    //     //    }
+    //     }
+    //     None => {
+    //         println!("[SCSI] No SCSI controller found");
+    //     }
+    // }
+
+    enumerate_pci(MMCONFIG_BASE as _);
 
     println!("Please wait, mapping heap...");
 

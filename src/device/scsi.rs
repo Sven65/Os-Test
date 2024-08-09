@@ -14,11 +14,13 @@ const VIRTIO_PCI_DEVICE_FEATURES: u8 = 0x10;
 const VIRTIO_PCI_QUEUE_SIZE: u8 = 0x12;
 const VIRTIO_PCI_QUEUE_SEL: u8 = 0x14;
 
-const COMMAND_BUFFER_OFFSET: u64 = 0x1000; // Example, adjust as needed
-const RESPONSE_OFFSET: u64 = 0x2000;
+const COMMAND_BUFFER_OFFSET: u64 = 0x00; // Example, adjust as needed
+const RESPONSE_OFFSET: u64 = 0x10;
 
 // Constants for Virtio SCSI
 const VIRTIO_PCI_QUEUE_NOTIFY: u64 = 0x50; // Adjust as needed
+
+const BLOCK_LENGTH_OFFSET: u64 = 0x28;
 
 
 
@@ -69,7 +71,7 @@ fn wait_for_command_completion(base_addr: u64) {
 
 pub fn get_block_info(base_addr: u64) -> (u64, u64) {
     // Send SCSI READ CAPACITY command
-    let command = [0x25, 0x00, 0x00, 0x00, 0x08, 0x00]; // 10-byte command
+    let command = [0x25, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
     let command_ptr = (base_addr + COMMAND_BUFFER_OFFSET) as *mut u8;
     unsafe {
         core::ptr::copy_nonoverlapping(command.as_ptr(), command_ptr, command.len());
@@ -89,46 +91,25 @@ pub fn get_block_info(base_addr: u64) -> (u64, u64) {
 
 
     // // Read the response (8 bytes)
-    // let response = unsafe {
-    //     let response_ptr = (base_addr + RESPONSE_OFFSET) as *const [u8; 8];
-    //     *response_ptr
-    // };
+    let response = unsafe {
+        let response_ptr = (base_addr + RESPONSE_OFFSET) as *const [u8; 8];
+        *response_ptr
+    };
+    
 
-    // serial_println!("Response is {:#?}", response);
+    serial_println!("Response is {:#?}", response);
 
-    // // Manually extract values from the response
-    // let num_blocks = BigEndian::read_u32(&response[0..4]) as u64;
-    // let block_size = BigEndian::read_u32(&response[4..8]) as u64;
+    // Manually extract values from the response
+    let num_blocks = BigEndian::read_u32(&response[0..4]) as u64;
+    let block_size = BigEndian::read_u32(&response[4..8]) as u64;
 
-    // serial_println!("Block size {}", block_size);
-    // serial_println!("Num blocks {}", num_blocks);
+    serial_println!("Block size {}", block_size);
+    serial_println!("Num blocks {}", num_blocks);
 
-    // serial_println!("Total size: {}", num_blocks * block_size);
+    serial_println!("Total size: {}", num_blocks * block_size);
 
-    // (block_size, num_blocks)
+    (block_size, num_blocks)
 
-    // Try reading response at different offsets
-    for offset in (0x0..0x100_000).step_by(0x10) {
-        let response = unsafe {
-            let response_ptr = (base_addr + offset) as *const [u8; 8];
-            *response_ptr
-        };
-
-        // Parse the response
-        let num_blocks = BigEndian::read_u32(&response[0..4]) as u64;
-        let block_size = BigEndian::read_u32(&response[4..8]) as u64;
-
-        // Print parsed values for debugging
-        serial_println!("Offset: 0x{:x} -> Block size: {}, Num blocks: {}", offset, block_size, num_blocks);
-
-        // Check if block size is a valid value (e.g., 512)
-        if block_size == 4096 && num_blocks == 262144 {
-            serial_println!("Found it!");
-            return (block_size, num_blocks);
-        }
-    }
-
-    (0,0)
 }
 
 pub fn initialize_virtio_scsi(
@@ -145,7 +126,14 @@ pub fn initialize_virtio_scsi(
     unsafe {
         println!("[SCSI] Negotiating features");
         let device_features = ptr::read_volatile((base_addr + VIRTIO_PCI_DEVICE_FEATURES as u64) as *mut u32);
+
+        serial_println!("device features {}", device_features);
+
         let driver_features = device_features; // Negotiate all features for simplicity
+
+        serial_println!("driver features {}", driver_features);
+
+
         ptr::write_volatile((base_addr + VIRTIO_PCI_DEVICE_FEATURES as u64) as *mut u32, driver_features);
 
         println!("[SCSI] Resetting device");
@@ -182,6 +170,11 @@ pub fn initialize_virtio_scsi(
         println!("[SCSI] Initializing virtqueue");
         initialize_virtqueue(base_addr, queue_index, queue_size, mapper, frame_allocator);
         println!("[SCSI] Virtqueue initialized, OK to go.");
+
+        let shit = ptr::read_volatile((base_addr + BLOCK_LENGTH_OFFSET as u64) as *mut u16);
+
+        serial_println!("shit {}", shit);
+
 
         true
     }
