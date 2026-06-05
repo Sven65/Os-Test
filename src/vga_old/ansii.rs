@@ -1,5 +1,5 @@
 use alloc::vec::Vec;
-use crate::vga_old::vga_buffer::{ColorCode, Color};
+use crate::vga::vga_buffer::{ColorCode, Color};
 use core::str::from_utf8;
 use crate::serial_println;
 
@@ -38,11 +38,6 @@ pub fn convert_ansii_to_color(buf: Vec<u8>) -> ColorCode {
 	let color_code: ColorCode;
 
 	let color_result = from_utf8(&*buf);
-
-	serial_println!("Color result: {:#?}", color_result);
-
-
-	serial_println!("Yeet");
 
 	match color_result {
 		Err(_) => {
