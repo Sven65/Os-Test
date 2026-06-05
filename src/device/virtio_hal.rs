@@ -104,3 +104,11 @@ pub fn mark_dma_pool_uncached(phys_mem_offset: u64) {
         }
     }
 }
+
+pub fn get_phys_mem_offset() -> u64 {
+    unsafe { PHYS_MEM_OFFSET }
+}
+
+pub fn virt_to_phys_pub(vaddr: u64) -> u64 {
+    unsafe { virt_to_phys_mapped(VirtAddr::new(vaddr)) as u64 }
+}

@@ -29,6 +29,17 @@ embedded-storage = "0.3.1"
 byteorder = { version = "1.5.0", default-features = false }
 virtio-drivers = { version = "0.7.5", default-features = false, features = ["alloc"] }
 
+smoltcp = { version = "0.11", default-features = false, features = [
+	"proto-ipv4",
+	"proto-dhcpv4",
+	"socket-tcp",
+	"socket-udp",
+	"socket-dns",
+	"socket-dhcpv4",
+	"socket-icmp",
+	"alloc",
+] }
+
 [dependencies.lazy_static]
 version = "1.0"
 features = ["spin_no_std"]
