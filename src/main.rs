@@ -7,23 +7,23 @@
 
 extern crate alloc;
 
+use test_os::device::ahci::{find_ahci_controller, initialize_ahci_controller, map_ahci_memory, AHCI_MEMORY_SIZE};
+//use test_os::device::virtio::enumerate_pci;
 use test_os::{memory, println, allocator, register_kb_hook, serial_println};
 use core::panic::PanicInfo;
 use bootloader::{BootInfo, entry_point};
 
 use test_os::memory::BootInfoFrameAllocator;
-use x86_64::{structures::paging::Page, VirtAddr};
-use alloc::{boxed::Box, vec, vec::Vec, rc::Rc};
+use x86_64::VirtAddr;
 
 use test_os::task::{Task, keyboard};
 use test_os::task::executor::Executor; 
 
-use vga::colors::{Color16, TextModeColor};
-use vga::writers::{ScreenCharacter, TextWriter, Text80x25};
+use test_os::device::virtio_hal::{init_hal, mark_dma_pool_uncached};
+use test_os::device::scsi::{find_and_init_blk, map_mmconfig};
 
-use test_os::vga_new::_print;
 
-use test_os::new_print;
+const MMCONFIG_BASE: usize = 0xB000_0000;
 
 entry_point!(kernel_main);
 
@@ -41,18 +41,66 @@ async fn example_task() {
 }
 
 fn kernel_main(boot_info: &'static BootInfo) -> ! {
-    println!("Hello World{}", "!");
+    println!("Please wait, booting...");
 
     test_os::init();
-    
+
+    println!("Please wait, mapping memory...");
+
     let phys_mem_offset = VirtAddr::new(boot_info.physical_memory_offset);
     let mut mapper = unsafe { memory::init(phys_mem_offset) };
     let mut frame_allocator = unsafe {
         BootInfoFrameAllocator::init(&boot_info.memory_map)
     };
 
+    println!("Please wait, checking for AHCI...");
+
+    match find_ahci_controller() {
+        Some((bus, slot, function, base_addr)) => {
+            let base_addr = 0xFEBB1000;
+            serial_println!("Found AHCI controller at bus {}, slot {}, function {}. base addr is {:#X}", bus, slot, function, base_addr);
+            println!("Please wait, mapping AHCI memory...");
+            match map_ahci_memory(&mut mapper, &mut frame_allocator, base_addr, AHCI_MEMORY_SIZE) {
+                Ok(_) => {
+                    serial_println!("Mapped AHCI memory");
+                    match initialize_ahci_controller(base_addr) {
+                        Ok(controller) => { serial_println!("Initialized AHCI controller {:#?}", controller); }
+                        Err(e) => { serial_println!("Failed to initialize AHCI controller: {:#?}", e); }
+                    }
+                },
+                Err(e) => { serial_println!("Failed to map AHCI memory: {:#?}", e); }
+            }
+        }
+        None => { println!("No AHCI controller found"); }
+    }
+
+    println!("Please wait, mapping heap...");
     allocator::init_heap(&mut mapper, &mut frame_allocator)
         .expect("heap initialization failed");
+
+    // Remap virtio MMIO as uncached — must happen before find_and_init_blk
+    test_os::memory::split_and_remap_as_uncached(
+        &mut mapper,
+        &mut frame_allocator,
+        phys_mem_offset,
+        0xfe000000,
+        16,
+    );
+
+    map_mmconfig(&mut mapper, &mut frame_allocator, 0xB000_0000);
+
+    init_hal(boot_info.physical_memory_offset);
+    mark_dma_pool_uncached(boot_info.physical_memory_offset);
+
+    if let Some(blk) = find_and_init_blk(0xB000_0000) {
+        test_os::fs::init(blk);
+        
+        // Test it
+        test_os::fs::write_file("hello.txt", b"Hello from my OS!");
+        if let Some(data) = test_os::fs::read_file("hello.txt") {
+            serial_println!("[fs] Read back: {}", core::str::from_utf8(&data).unwrap_or("?"));
+        }
+    }
 
     let mut executor = Executor::new();
     executor.spawn(Task::new(example_task()));
@@ -65,12 +113,6 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
     register_kb_hook!(kb_hook_cb);
 
     executor.run();
-
-
-    
-
-    #[cfg(test)]
-    test_main();
 
     println!("No crashes, woo!");
     test_os::hlt_loop();

@@ -1,7 +1,7 @@
 use alloc::vec::Vec;
 use crate::vga_old::vga_buffer::{ColorCode, Color};
 use core::str::from_utf8;
-use crate::{serial_println};
+use crate::serial_println;
 
 // TODO: Make this support light mode
 fn convert_code_to_color(color: &str) -> Color {
@@ -35,9 +35,9 @@ fn convert_code_to_color(color: &str) -> Color {
 pub fn convert_ansii_to_color(buf: Vec<u8>) -> ColorCode {
 	let mut fg_color: Color = Color::White;
 	let mut bg_color: Color = Color::Black;
-	let mut color_code: ColorCode = ColorCode::new(Color::White, Color::Black);
+	let color_code: ColorCode;
 
-	let mut color_result = from_utf8(&*buf);
+	let color_result = from_utf8(&*buf);
 
 	serial_println!("Color result: {:#?}", color_result);
 
@@ -45,7 +45,7 @@ pub fn convert_ansii_to_color(buf: Vec<u8>) -> ColorCode {
 	serial_println!("Yeet");
 
 	match color_result {
-		Err(e) => {
+		Err(_) => {
 			panic!("Exception when parsing color code");
 		},
 		Ok(v) => {
@@ -54,7 +54,7 @@ pub fn convert_ansii_to_color(buf: Vec<u8>) -> ColorCode {
 			let replaced_string = v.replace("[", "");
 			// let mut is_light = false;
 
-			let mut split = replaced_string.split(";");
+			let split = replaced_string.split(";");
 
 			serial_println!("Hello, Serial World!");
 

@@ -28,6 +28,7 @@ pub mod vga_old;
 pub mod vga_new;
 pub mod util;
 pub mod fs;
+pub mod device;
 
 extern crate alloc;
 

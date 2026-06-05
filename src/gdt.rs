@@ -1,4 +1,7 @@
+use core::ptr::addr_of;
+
 use lazy_static::lazy_static;
+use x86_64::registers::segmentation::Segment;
 use x86_64::structures::gdt::{GlobalDescriptorTable, Descriptor, SegmentSelector};
 use x86_64::structures::tss::TaskStateSegment;
 use x86_64::VirtAddr;
@@ -12,7 +15,8 @@ lazy_static! {
             const STACK_SIZE: usize = 4096 * 5;
             static mut STACK: [u8; STACK_SIZE] = [0; STACK_SIZE];
 
-            let stack_start = VirtAddr::from_ptr(unsafe { &STACK });
+            #[allow(unused_unsafe)]
+            let stack_start = VirtAddr::from_ptr(unsafe {addr_of!(STACK) });
             let stack_end = stack_start + STACK_SIZE;
             stack_end
         };
@@ -34,12 +38,12 @@ struct Selectors {
 
 
 pub fn init() {
-    use x86_64::instructions::segmentation::set_cs;
+    use x86_64::instructions::segmentation::CS;
     use x86_64::instructions::tables::load_tss;
 
     GDT.0.load();
     unsafe {
-        set_cs(GDT.1.code_selector);
+        CS::set_reg(GDT.1.code_selector);
         load_tss(GDT.1.tss_selector);
     }
 }

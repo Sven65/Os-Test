@@ -25,7 +25,7 @@ lazy_static! {
 }
 
 impl Writer {
-	pub fn handle_escape(&mut self, byte: u8) {
+	pub fn handle_escape(&mut self, _byte: u8) {
 
 	}
 
@@ -59,7 +59,7 @@ impl Writer {
 			}
 		}
 
-		for i in 0..chars_left {
+		for _ in 0..chars_left {
 			self.write_byte(b' ');
 		}
 		
