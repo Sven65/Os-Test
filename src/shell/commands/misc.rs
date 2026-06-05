@@ -66,3 +66,21 @@ impl Command for ExitCommand {
         exit_qemu(QemuExitCode::Success);
     }
 }
+
+pub struct EchoCommand;
+impl Command for EchoCommand {
+    fn name(&self) -> &'static str { "echo" }
+    fn description(&self) -> &'static str { "Print text: echo <text>" }
+    fn execute(&self, args: &[String]) {
+        println!("{}", args.join(" "));
+    }
+}
+
+pub struct ClearCommand;
+impl Command for ClearCommand {
+    fn name(&self) -> &'static str { "clear" }
+    fn description(&self) -> &'static str { "Clear the screen" }
+    fn execute(&self, _args: &[String]) {
+        crate::vga::clear_screen();
+    }
+}

@@ -10,13 +10,6 @@ use crate::device::virtio_hal::OsHal;
 use crate::serial_println;
 use virtio_fs::VirtioBlockDevice;
 
-pub struct DirEntry {
-    pub name: String,
-    pub is_dir: bool,
-    pub size: u64,
-    pub modified: (u16, u16, u16, u16, u16, u16), // year, month, day, hour, min, sec
-}
-
 #[derive(Debug)]
 pub struct RtcTimeProvider;
 
@@ -35,9 +28,20 @@ impl TimeProvider for RtcTimeProvider {
     }
 }
 
+pub struct DirEntry {
+    pub name: String,
+    pub is_dir: bool,
+    pub size: u64,
+    pub modified: (u16, u16, u16, u16, u16, u16),
+}
+
 type Fs = FileSystem<VirtioBlockDevice, RtcTimeProvider>;
 
 pub static FS: Mutex<Option<Fs>> = Mutex::new(None);
+
+lazy_static::lazy_static! {
+    static ref CURRENT_DIR: Mutex<String> = Mutex::new(String::from("/"));
+}
 
 pub fn init(blk: VirtIOBlk<OsHal, PciTransport>) {
     let mut dev = VirtioBlockDevice::new(blk);
@@ -63,11 +67,103 @@ pub fn init(blk: VirtIOBlk<OsHal, PciTransport>) {
     serial_println!("[fs] Mounted.");
 }
 
+pub fn resolve_path(path: &str) -> String {
+    if path.starts_with('/') {
+        path.to_string()
+    } else {
+        let current = CURRENT_DIR.lock().clone();
+        if current == "/" {
+            path.to_string()
+        } else {
+            alloc::format!("{}/{}", current, path)
+        }
+    }
+}
+
+/// Split a resolved path into (parent_dir, filename)
+/// e.g. "balls/test" -> ("balls", "test")
+///      "test" -> ("", "test")
+///      "/balls/test" -> ("/balls", "test")
+fn split_path(path: &str) -> (&str, &str) {
+    match path.rfind('/') {
+        Some(0) => ("/", &path[1..]),
+        Some(pos) => (&path[..pos], &path[pos+1..]),
+        None => ("", path),
+    }
+}
+
+/// Open the parent directory of a path, or root if no parent
+macro_rules! open_parent {
+    ($root:expr, $dir:expr) => {
+        if $dir.is_empty() || $dir == "/" {
+            $root
+        } else {
+            match $root.open_dir($dir) {
+                Ok(d) => d,
+                Err(_) => return false,
+            }
+        }
+    }
+}
+
+pub fn get_current_dir() -> String {
+    let dir = CURRENT_DIR.lock().clone();
+    if dir.is_empty() { String::from("/") } else { dir }
+}
+
+pub fn set_current_dir(path: &str) -> bool {
+    let new_path = if path == ".." {
+        let current = CURRENT_DIR.lock().clone();
+        if current == "/" || current.is_empty() {
+            String::from("/")
+        } else {
+            match current.rfind('/') {
+                Some(0) | None => String::from("/"),
+                Some(pos) => current[..pos].to_string(),
+            }
+        }
+    } else if path == "/" {
+        String::from("/")
+    } else if path.starts_with('/') {
+        path.to_string()
+    } else {
+        resolve_path(path)
+    };
+
+    if new_path == "/" {
+        *CURRENT_DIR.lock() = String::from("/");
+        return true;
+    }
+
+    let exists = {
+        let mut guard = FS.lock();
+        let fs = match guard.as_mut() {
+            Some(fs) => fs,
+            None => return false,
+        };
+        let root = fs.root_dir();
+        let result = root.open_dir(&new_path).is_ok();
+        result
+    };
+
+    if exists {
+        *CURRENT_DIR.lock() = new_path;
+    }
+    exists
+}
+
 pub fn read_file(path: &str) -> Option<Vec<u8>> {
+    let path = resolve_path(path);
+    let (dir, filename) = split_path(&path);
     let mut guard = FS.lock();
     let fs = guard.as_mut()?;
     let root = fs.root_dir();
-    let mut file = root.open_file(path).ok()?;
+    let parent = if dir.is_empty() || dir == "/" {
+        root
+    } else {
+        root.open_dir(dir).ok()?
+    };
+    let mut file = parent.open_file(filename).ok()?;
     let mut buf = Vec::new();
     let mut chunk = [0u8; 512];
     loop {
@@ -81,10 +177,16 @@ pub fn read_file(path: &str) -> Option<Vec<u8>> {
 }
 
 pub fn write_file(path: &str, data: &[u8]) -> bool {
+    let path = resolve_path(path);
+    let (dir, filename) = split_path(&path);
     let mut guard = FS.lock();
-    let fs = guard.as_mut().unwrap();
+    let fs = match guard.as_mut() {
+        Some(fs) => fs,
+        None => return false,
+    };
     let root = fs.root_dir();
-    let mut file = match root.create_file(path) {
+    let parent = open_parent!(root, dir);
+    let mut file = match parent.create_file(filename) {
         Ok(f) => f,
         Err(_) => return false,
     };
@@ -92,12 +194,18 @@ pub fn write_file(path: &str, data: &[u8]) -> bool {
 }
 
 pub fn append_file(path: &str, data: &[u8]) -> bool {
+    let path = resolve_path(path);
+    let (dir, filename) = split_path(&path);
     let mut guard = FS.lock();
-    let fs = guard.as_mut().unwrap();
+    let fs = match guard.as_mut() {
+        Some(fs) => fs,
+        None => return false,
+    };
     let root = fs.root_dir();
-    let mut file = match root.open_file(path) {
+    let parent = open_parent!(root, dir);
+    let mut file = match parent.open_file(filename) {
         Ok(f) => f,
-        Err(_) => match root.create_file(path) {
+        Err(_) => match parent.create_file(filename) {
             Ok(f) => f,
             Err(_) => return false,
         }
@@ -106,33 +214,73 @@ pub fn append_file(path: &str, data: &[u8]) -> bool {
     file.write_all(data).is_ok()
 }
 
-pub fn format_disk() -> bool {
-    serial_println!("[fs] format_disk: not supported while mounted");
-    false
-}
-
-pub fn create_dir(path: &str) -> bool {
+pub fn delete_file(path: &str) -> bool {
+    let path = resolve_path(path);
+    let (dir, filename) = split_path(&path);
     let mut guard = FS.lock();
     let fs = match guard.as_mut() {
         Some(fs) => fs,
         None => return false,
     };
     let root = fs.root_dir();
-    let result = root.create_dir(path).is_ok();
+    let parent = open_parent!(root, dir);
+    parent.remove(filename).is_ok()
+}
+
+pub fn delete_dir(path: &str) -> bool {
+    delete_file(path)
+}
+
+pub fn create_dir(path: &str) -> bool {
+    let path = resolve_path(path);
+    let (dir, dirname) = split_path(&path);
+    let mut guard = FS.lock();
+    let fs = match guard.as_mut() {
+        Some(fs) => fs,
+        None => return false,
+    };
+    let root = fs.root_dir();
+    let parent = open_parent!(root, dir);
+    let result = parent.create_dir(dirname).is_ok();
     result
 }
 
+pub fn copy_file(src: &str, dst: &str) -> bool {
+    let data = match read_file(src) {
+        Some(d) => d,
+        None => return false,
+    };
+    write_file(dst, &data)
+}
+
+pub fn move_file(src: &str, dst: &str) -> bool {
+    if !copy_file(src, dst) {
+        return false;
+    }
+    delete_file(src)
+}
+
+pub fn format_disk() -> bool {
+    serial_println!("[fs] format_disk: not supported while mounted");
+    false
+}
+
 pub fn list_dir(path: &str) -> Vec<DirEntry> {
+    let path = if path.is_empty() {
+        CURRENT_DIR.lock().clone()
+    } else {
+        resolve_path(path)
+    };
     let mut guard = FS.lock();
     let fs = match guard.as_mut() {
         Some(fs) => fs,
         None => return Vec::new(),
     };
     let root = fs.root_dir();
-    let dir = if path.is_empty() || path == "/" {
+    let dir = if path == "/" || path.is_empty() {
         root
     } else {
-        match root.open_dir(path) {
+        match root.open_dir(&path) {
             Ok(d) => d,
             Err(_) => return Vec::new(),
         }
@@ -160,26 +308,4 @@ pub fn list_dir(path: &str) -> Vec<DirEntry> {
         }
     }
     entries
-}
-
-pub fn delete_file(path: &str) -> bool {
-    let mut guard = FS.lock();
-    let fs = match guard.as_mut() {
-        Some(fs) => fs,
-        None => return false,
-    };
-    let root = fs.root_dir();
-    let result = root.remove(path).is_ok();
-    result
-}
-
-pub fn delete_dir(path: &str) -> bool {
-    let mut guard = FS.lock();
-    let fs = match guard.as_mut() {
-        Some(fs) => fs,
-        None => return false,
-    };
-    let root = fs.root_dir();
-    let result = root.remove(path).is_ok();
-    result
 }

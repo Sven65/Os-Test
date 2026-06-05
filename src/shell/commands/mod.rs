@@ -27,11 +27,19 @@ pub fn get_commands() -> Vec<&'static dyn Command> {
         &fs::MkdirCommand,
         &fs::EditCommand,
         &fs::DeleteCommand,
+        &fs::CatCommand,
+        &fs::CpCommand,
+        &fs::MvCommand,
+        &fs::PwdCommand,
+        &fs::CdCommand,
+        &fs::TouchCommand,
+        &misc::ClearCommand,
         &misc::RandCommand,
         &misc::TimeCommand,
         &misc::ColorCommand,
         &misc::BitsCommand,
         &misc::ExitCommand,
+        &misc::EchoCommand,
     ]
 }
 
