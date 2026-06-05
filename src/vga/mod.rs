@@ -44,8 +44,39 @@ pub enum Color {
 pub struct ColorCode(u8);
 
 impl ColorCode {
-    pub fn new(foreground: Color, background: Color) -> ColorCode {
+    pub const fn new(foreground: Color, background: Color) -> ColorCode {
         ColorCode((background as u8) << 4 | (foreground as u8))
+    }
+}
+
+fn unicode_to_cp437(c: char) -> u8 {
+    match c {
+        'å' => 0x86,
+        'Å' => 0x8F,
+        'ä' => 0x84,
+        'Ä' => 0x8E,
+        'ö' => 0x94,
+        'Ö' => 0x99,
+        'é' => 0x82,
+        'è' => 0x8A,
+        'ê' => 0x88,
+        'ë' => 0x89,
+        'à' => 0x85,
+        'â' => 0x83,
+        'ù' => 0x97,
+        'û' => 0x96,
+        'ü' => 0x81,
+        'Ü' => 0x9A,
+        'ñ' => 0xA4,
+        'ç' => 0x87,
+        '§' => 0x15,
+        '°' => 0xF8,
+        '£' => 0x9C,
+        '¥' => 0x9D,
+        '€' => 0xEE,
+        '½' => 0xAB,
+        '¼' => 0xAC,
+        _ => 0xFE, // unknown
     }
 }
 
@@ -168,17 +199,15 @@ impl Writer {
     }
 
     pub fn write_string(&mut self, s: &str) {
-        for byte in s.bytes() {
-            match byte {
-                0x1b => self.handle_escape(byte),
-                0x20..=0x7e | b'\n' | 0x7f => {
-                    if self.is_escaped {
-                        self.handle_escape(byte);
-                    } else {
-                        self.write_byte(byte);
-                    }
-                }
-                _ => self.write_byte(0xfe),
+        for c in s.chars() {
+            match c {
+                '\x1b' => self.handle_escape(b'\x1b'),
+                '\n' => self.write_byte(b'\n'),
+                '\x7f' => self.write_byte(b'\x7f'),
+                c if self.is_escaped => self.handle_escape(c as u8),
+                c if (c as u32) < 0x20 => self.write_byte(c as u8),
+                c if (c as u32) <= 0x7e => self.write_byte(c as u8),
+                c => self.write_byte(unicode_to_cp437(c)),
             }
         }
     }

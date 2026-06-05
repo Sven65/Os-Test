@@ -92,6 +92,8 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
 
     if let Some(blk) = find_and_init_blk(0xB000_0000) {
         test_os::fs::init(blk);
+
+        test_os::load_config();
         
         // Test it
         test_os::fs::write_file("hello.txt", b"Hello from my OS!");

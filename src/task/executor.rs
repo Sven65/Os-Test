@@ -3,6 +3,8 @@ use alloc::{collections::BTreeMap, sync::Arc};
 use core::task::Waker;
 use crossbeam_queue::ArrayQueue;
 use alloc::task::Wake;
+use core::sync::atomic::AtomicBool;
+use conquer_once::spin::OnceCell;
 
 use core::task::{Context, Poll};
 
@@ -13,6 +15,16 @@ pub struct Executor {
 }
 
 
+static SPAWN_QUEUE: OnceCell<ArrayQueue<Task>> = OnceCell::uninit();
+pub static SUPPRESS_PROMPT: AtomicBool = AtomicBool::new(false);
+
+pub fn spawn_task(task: Task) {
+    SPAWN_QUEUE
+        .try_init_once(|| ArrayQueue::new(100))
+        .ok();
+    SPAWN_QUEUE.try_get().unwrap().push(task).ok();
+}
+
 impl Executor {
     pub fn new() -> Self {
         Executor {
@@ -21,11 +33,28 @@ impl Executor {
             waker_cache: BTreeMap::new(),
         }
     }
-	
-	pub fn run(&mut self) -> ! {
+
+    pub fn run(&mut self) -> ! {
+        SPAWN_QUEUE.try_init_once(|| ArrayQueue::new(100)).ok();
+
         loop {
+            // Drain spawn queue first
+            if let Ok(queue) = SPAWN_QUEUE.try_get() {
+                while let Ok(task) = queue.pop() {
+                    self.spawn(task);
+                }
+            }
+
             self.run_ready_tasks();
-			self.sleep_if_idle();
+
+            // Drain again after running tasks, in case tasks spawned more tasks
+            if let Ok(queue) = SPAWN_QUEUE.try_get() {
+                while let Ok(task) = queue.pop() {
+                    self.spawn(task);
+                }
+            }
+
+            self.sleep_if_idle();
         }
     }
 	

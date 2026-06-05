@@ -1,4 +1,5 @@
 mod commands;
+mod flags;
 
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
@@ -34,7 +35,7 @@ fn parse_command_line(input: &[u8]) -> Vec<String> {
 
 pub fn pass_to_shell(v: Vec<u8>) {
 	let parsed = parse_command_line(&v);
-	if parsed.is_empty() { prompt(); return; }
+	if parsed.is_empty() { return; } // remove the prompt() call here
 
 	let args = parsed[1..].to_vec();
 
@@ -43,6 +44,5 @@ pub fn pass_to_shell(v: Vec<u8>) {
 		None => println!("Unknown command: {}", parsed[0]),
 	}
 
-	print!("\n");
-	prompt();
+	//print!("\n");
 }

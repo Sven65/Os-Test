@@ -1,4 +1,4 @@
-use alloc::string::String;
+use alloc::string::{String, ToString};
 use crate::{println, print};
 use crate::device::ahci::{find_ahci_controller, find_sata_devices, read_ahci_memory, AHCI_MEMORY_SIZE};
 use crate::device::get_all_devices;
@@ -65,5 +65,50 @@ impl Command for DumpCommand {
             },
             _ => println!("Unknown dump type: {}", args[0]),
         }
+    }
+}
+
+pub struct ConfigCommand;
+impl Command for ConfigCommand {
+    fn name(&self) -> &'static str { "config" }
+    fn description(&self) -> &'static str { "Get or set config: config <key> [value]" }
+    fn execute(&self, args: &[String]) {
+        if args.is_empty() {
+            let cfg = crate::CONFIG.lock();
+            println!("hostname={}", cfg.hostname);
+            println!("keyboard_layout={}", cfg.keyboard_layout);
+            return;
+        }
+
+        let flags = crate::shell::flags::Flags::parse(args);
+        let key = match flags.get(0) {
+            Some(k) => k.to_string(),
+            None => { println!("Usage: config <key> [value]"); return; }
+        };
+
+        if flags.args.len() == 1 {
+            let cfg = crate::CONFIG.lock();
+            match key.as_str() {
+                "hostname"         => println!("{}", cfg.hostname),
+                "keyboard_layout"  => println!("{}", cfg.keyboard_layout),
+                _ => println!("Unknown key: {}", key),
+            }
+            return;
+        }
+
+        let value = flags.args[1..].join(" ");
+        {
+            let mut cfg = crate::CONFIG.lock();
+            match key.as_str() {
+                "hostname"        => cfg.hostname = value.clone(),
+                "keyboard_layout" => cfg.keyboard_layout = value.clone(),
+                _ => { println!("Unknown key: {}", key); return; }
+            }
+            if !cfg.save() {
+                println!("Failed to save config");
+                return;
+            }
+        }
+        println!("Saved {} = {}", key, value);
     }
 }

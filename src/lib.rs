@@ -11,6 +11,8 @@ use core::panic::PanicInfo;
 
 #[cfg(test)]
 use bootloader::{entry_point, BootInfo};
+use lazy_static::lazy_static;
+use spin::Mutex;
 
 #[cfg(test)]
 entry_point!(test_kernel_main);
@@ -28,7 +30,19 @@ pub mod util;
 pub mod fs;
 pub mod device;
 
+pub mod program;
+pub mod config;
+
+
 extern crate alloc;
+
+lazy_static! {
+    pub static ref CONFIG: Mutex<config::SystemConfig> = Mutex::new(config::SystemConfig::default());
+}
+
+pub fn load_config() {
+    *CONFIG.lock() = config::SystemConfig::load();
+}
 
 pub fn init() {
 	gdt::init();
