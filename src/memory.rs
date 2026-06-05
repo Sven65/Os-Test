@@ -1,7 +1,9 @@
 use core::ptr::read_volatile;
 
 use x86_64::{
-    structures::paging::{FrameAllocator, OffsetPageTable, PageTable, PhysFrame, Size4KiB}, PhysAddr, VirtAddr
+    PhysAddr, VirtAddr, structures::paging::{
+        FrameAllocator, OffsetPageTable, Page, PageTable, PageTableFlags, PageTableIndex, PhysFrame, Size4KiB
+    }
 };
 
 use bootloader::bootinfo::{MemoryMap, MemoryRegionType};
@@ -161,4 +163,71 @@ pub fn test_memory_access(address: u64) -> u32 {
         let reg_ptr = address as *const u32;
         read_volatile(reg_ptr)
     }
+}
+
+pub fn split_and_remap_as_uncached(
+    mapper: &mut OffsetPageTable,
+    frame_allocator: &mut impl FrameAllocator<Size4KiB>,
+    phys_mem_offset: VirtAddr,
+    phys_addr: u64,
+    num_pages: usize,
+) {
+    use x86_64::structures::paging::PageTableFlags as Flags;
+
+    for i in 0..num_pages {
+        let phys = PhysAddr::new(phys_addr + (i * 4096) as u64);
+        let virt = phys_mem_offset + phys_addr + (i * 4096) as u64;
+        let page = Page::<Size4KiB>::containing_address(virt);
+        let frame = PhysFrame::<Size4KiB>::containing_address(phys);
+        let flags = Flags::PRESENT | Flags::WRITABLE | Flags::NO_CACHE | Flags::NO_EXECUTE;
+
+        // Walk the page table manually to handle the huge page case
+        unsafe {
+            // Get the level 4 table
+            let (l4_frame, _) = x86_64::registers::control::Cr3::read();
+            let l4_table = &mut *(phys_mem_offset + l4_frame.start_address().as_u64()).as_mut_ptr::<PageTable>();
+            
+            let l4_entry = &mut l4_table[page.p4_index()];
+            let l3_table = &mut *(phys_mem_offset + l4_entry.addr().as_u64()).as_mut_ptr::<PageTable>();
+            
+            let l3_entry = &mut l3_table[page.p3_index()];
+            let l2_table = &mut *(phys_mem_offset + l3_entry.addr().as_u64()).as_mut_ptr::<PageTable>();
+            
+            let l2_entry = &mut l2_table[page.p2_index()];
+            
+            if l2_entry.flags().contains(PageTableFlags::HUGE_PAGE) {
+                // This is a 2MB huge page — we need to split it
+                // Allocate a new level 1 page table
+                let new_l1_frame = frame_allocator.allocate_frame()
+                    .expect("failed to allocate L1 page table frame");
+                
+                // Zero the new page table
+                let new_l1_table = &mut *(phys_mem_offset + new_l1_frame.start_address().as_u64()).as_mut_ptr::<PageTable>();
+                new_l1_table.zero();
+                
+                // Fill new L1 table with 512 entries mapping the same 2MB region
+                let huge_phys_base = l2_entry.addr().as_u64(); // base of the 2MB region
+                let orig_flags = l2_entry.flags() & !PageTableFlags::HUGE_PAGE;
+                
+                for j in 0..512usize {
+                    let entry_phys = PhysAddr::new(huge_phys_base + (j * 4096) as u64);
+                    let entry_frame = PhysFrame::<Size4KiB>::containing_address(entry_phys);
+                    new_l1_table[PageTableIndex::new(j as u16)].set_frame(entry_frame, orig_flags);
+                }
+                
+                // Replace the huge page entry with the new L1 table
+                l2_entry.set_frame(new_l1_frame, PageTableFlags::PRESENT | PageTableFlags::WRITABLE);
+                
+                // Flush TLB for this 2MB region
+                x86_64::instructions::tlb::flush_all();
+            }
+            
+            // Now map the specific 4KB page as uncached
+            let l2_entry = &mut l2_table[page.p2_index()];
+            let l1_table = &mut *(phys_mem_offset + l2_entry.addr().as_u64()).as_mut_ptr::<PageTable>();
+            l1_table[page.p1_index()].set_frame(frame, flags);
+            x86_64::instructions::tlb::flush(virt);
+        }
+    }
+    serial_println!("[mem] remapped {:#x}+{} pages as uncached", phys_addr, num_pages);
 }

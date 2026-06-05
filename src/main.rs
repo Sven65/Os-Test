@@ -8,9 +8,7 @@
 extern crate alloc;
 
 use test_os::device::ahci::{find_ahci_controller, initialize_ahci_controller, map_ahci_memory, AHCI_MEMORY_SIZE};
-use test_os::device::scsi::{find_scsi_controller, get_block_info, initialize_virtio_scsi};
-use test_os::device::virtio::enumerate_pci;
-use test_os::fs::scsifs::create_fs;
+//use test_os::device::virtio::enumerate_pci;
 use test_os::{memory, println, allocator, register_kb_hook, serial_println};
 use core::panic::PanicInfo;
 use bootloader::{BootInfo, entry_point};
@@ -20,6 +18,9 @@ use x86_64::VirtAddr;
 
 use test_os::task::{Task, keyboard};
 use test_os::task::executor::Executor; 
+
+use test_os::device::virtio_hal::{init_hal, mark_dma_pool_uncached};
+use test_os::device::scsi::{find_and_init_blk, map_mmconfig};
 
 
 const MMCONFIG_BASE: usize = 0xB000_0000;
@@ -46,7 +47,6 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
 
     println!("Please wait, mapping memory...");
 
-    
     let phys_mem_offset = VirtAddr::new(boot_info.physical_memory_offset);
     let mut mapper = unsafe { memory::init(phys_mem_offset) };
     let mut frame_allocator = unsafe {
@@ -59,10 +59,7 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
         Some((bus, slot, function, base_addr)) => {
             let base_addr = 0xFEBB1000;
             serial_println!("Found AHCI controller at bus {}, slot {}, function {}. base addr is {:#X}", bus, slot, function, base_addr);
-
             println!("Please wait, mapping AHCI memory...");
-
-
             match map_ahci_memory(&mut mapper, &mut frame_allocator, base_addr, AHCI_MEMORY_SIZE) {
                 Ok(_) => {
                     serial_println!("Mapped AHCI memory");
@@ -71,50 +68,39 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
                         Err(e) => { serial_println!("Failed to initialize AHCI controller: {:#?}", e); }
                     }
                 },
-                Err(e) => {
-                    serial_println!("Failed to map AHCI memory: {:#?}", e);
-                }
+                Err(e) => { serial_println!("Failed to map AHCI memory: {:#?}", e); }
             }
         }
-        None => {
-            println!("No AHCI controller found");
-        }
+        None => { println!("No AHCI controller found"); }
     }
 
-    println!("[SCSI] Please wait, checking for SCSI");
-    // match find_scsi_controller() {
-    //     Some((bus, slot, function, base_addr)) => {
-    //         serial_println!("Found SCSI controller at bus {}, slot {}, function {}. base addr is {:#X}", bus, slot, function, base_addr);
-
-    //         println!("[SCSI] Please wait, initializing SCSI.");
-
-    //         initialize_virtio_scsi(base_addr, &mut mapper, &mut frame_allocator);
-
-    //         println!("[SCSI] Creating FS");
-
-    //     //    for i in 0..0xfff {
-    //     //         serial_println!("===[ Trying offset {:#x} ]===", i);
-    //             let (block_size, num_blocks) = get_block_info(base_addr);
-
-    //             // match create_fs(base_addr, 512) {
-    //             //     Ok(_) => {println!("Created FS"); },
-    //             //     Err(e) => {serial_println!("Failed to create FS {:#?}", e); }
-    //             // }
-
-
-    //     //    }
-    //     }
-    //     None => {
-    //         println!("[SCSI] No SCSI controller found");
-    //     }
-    // }
-
-    enumerate_pci(MMCONFIG_BASE as _);
-
     println!("Please wait, mapping heap...");
-
     allocator::init_heap(&mut mapper, &mut frame_allocator)
         .expect("heap initialization failed");
+
+    // Remap virtio MMIO as uncached — must happen before find_and_init_blk
+    test_os::memory::split_and_remap_as_uncached(
+        &mut mapper,
+        &mut frame_allocator,
+        phys_mem_offset,
+        0xfe000000,
+        16,
+    );
+
+    map_mmconfig(&mut mapper, &mut frame_allocator, 0xB000_0000);
+
+    init_hal(boot_info.physical_memory_offset);
+    mark_dma_pool_uncached(boot_info.physical_memory_offset);
+
+    if let Some(blk) = find_and_init_blk(0xB000_0000) {
+        test_os::fs::init(blk);
+        
+        // Test it
+        test_os::fs::write_file("hello.txt", b"Hello from my OS!");
+        if let Some(data) = test_os::fs::read_file("hello.txt") {
+            serial_println!("[fs] Read back: {}", core::str::from_utf8(&data).unwrap_or("?"));
+        }
+    }
 
     let mut executor = Executor::new();
     executor.spawn(Task::new(example_task()));
@@ -127,7 +113,6 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
     register_kb_hook!(kb_hook_cb);
 
     executor.run();
-
 
     println!("No crashes, woo!");
     test_os::hlt_loop();

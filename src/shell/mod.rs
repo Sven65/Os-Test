@@ -5,7 +5,7 @@ use fatfs::{Read, Write};
 use crate::allocator::HEAP_KIB;
 use crate::device::ahci::{find_ahci_controller, find_sata_devices, read_ahci_memory, AHCI_MEMORY_SIZE};
 use crate::device::get_all_devices;
-use crate::fs::FILE_SYSTEM;
+use crate::fs::{read_file, write_file, append_file};
 use crate::memory::{dump_memory, test_memory_access};
 use crate::vga_old::vga_buffer::get_chars;
 use crate::{exit_qemu, print, println, reset_color, serial_print, serial_println, QemuExitCode};
@@ -104,85 +104,41 @@ pub fn pass_to_shell(v: Vec<u8>) {
 			print!("Got args {:#?}", args);
 		},
 		b"write" => {
+			if args.is_empty() { println!("Usage: write <filename> <contents>"); prompt(); return; }
 			let filename = &args[0];
-			let contents = args.clone().split_off(1);
-			let fs = FILE_SYSTEM.lock();
-
-			let root_dir = fs.root_dir();
-
-			let file_result = root_dir.create_file(filename);
-
-			match file_result {
-				Err(e) => { println!("Failed to create file: {:#?}", e); }
-				Ok(mut file) => {
-					let contents = contents.join(" ");
-					let contents_u8 = contents.as_bytes();
-		
-					serial_println!("writing {:#?}", contents_u8);
-		
-					file.write(contents_u8).expect("Failed to write file");
-				}
+			let contents = args[1..].join(" ");
+			if write_file(filename, contents.as_bytes()) {
+				println!("Wrote {} bytes to {}", contents.len(), filename);
+			} else {
+				println!("Failed to write {}", filename);
 			}
-		}
+		},
 		b"read" => {
+			if args.is_empty() { println!("Usage: read <filename>"); prompt(); return; }
 			let filename = &args[0];
-			let fs = FILE_SYSTEM.lock();
-
-			let root_dir = fs.root_dir();
-
-
-			let file_result = root_dir.open_file(filename);
-
-			match file_result {
-				Ok(mut file) => {
-					let mut buf = Vec::<u8>::new();
-					file.read(&mut buf).expect("Failed to read file");
-	
-					
-					let str = core::str::from_utf8(&buf).expect("Failed to create str");
-					serial_println!("read file {:#?} = {}", buf, str);
-	
-					println!("{}", str);
-				},
-				Err(e) => {
-					println!("Failed to read file: {:#?}", e);
+			match read_file(filename) {
+				Some(data) => {
+					let s = core::str::from_utf8(&data).unwrap_or("(not utf8)");
+					println!("{}", s);
 				}
-			};
-
+				None => { println!("Failed to read {}", filename); }
+			}
 		},
 		b"ls" => {
-			let fs = FILE_SYSTEM.lock();
-			let dir = fs.root_dir();
-			let files = dir.iter();
-
-			for file in files {
-				match file {
-					Ok(file) => {
-						let name = core::str::from_utf8(file.short_file_name_as_bytes()).expect("Failed to convert name to str");
-						if file.is_file() {
-							print!("{} ", name);
-						} else if file.is_dir() {
-							print!("\x1b[32m{} ", name);
-						}
-
-						serial_println!("{:#?}", file);
-					}
-					Err(e) => { serial_println!("Failed to stat item: {:#?}", e); }
-				}				
+			for (name, is_dir) in crate::fs::list_dir() {
+				if is_dir {
+					print!("\x1b[32m{} ", name);
+				} else {
+					print!("{} ", name);
+				}
 			}
-
 			reset_color!();
 		},
+
 		b"mkdir" => {
-			let dirname = &args[0];
-			let fs = FILE_SYSTEM.lock();
-
-			let root_dir = fs.root_dir();
-
-			let res = root_dir.create_dir(dirname);
-
-			if res.is_err() {
-				println!("Failed to create dir: {:#?}", res.err());
+			if args.is_empty() { println!("Usage: mkdir <dirname>"); prompt(); return; }
+			if !crate::fs::create_dir(&args[0]) {
+				println!("Failed to create dir");
 			}
 		},
 		b"rand" => {
