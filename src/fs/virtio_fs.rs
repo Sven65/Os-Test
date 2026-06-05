@@ -1,10 +1,7 @@
-use alloc::vec;
-use alloc::vec::Vec;
 use fatfs::{IoBase, Read, Seek, SeekFrom, Write};
 use virtio_drivers::device::blk::VirtIOBlk;
 use virtio_drivers::transport::pci::PciTransport;
 use crate::device::virtio_hal::OsHal;
-use crate::serial_println;
 
 pub struct VirtioBlockDevice {
     blk: VirtIOBlk<OsHal, PciTransport>,

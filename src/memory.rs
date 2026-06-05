@@ -166,7 +166,6 @@ pub fn test_memory_access(address: u64) -> u32 {
 }
 
 pub fn split_and_remap_as_uncached(
-    mapper: &mut OffsetPageTable,
     frame_allocator: &mut impl FrameAllocator<Size4KiB>,
     phys_mem_offset: VirtAddr,
     phys_addr: u64,

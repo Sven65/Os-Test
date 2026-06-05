@@ -1,6 +1,5 @@
 pub mod virtio_fs;
-
-use alloc::string::String;
+use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 use fatfs::{FileSystem, FsOptions, FormatVolumeOptions, Read, Write, Seek};
 use spin::Mutex;
@@ -9,8 +8,6 @@ use virtio_drivers::transport::pci::PciTransport;
 use crate::device::virtio_hal::OsHal;
 use crate::serial_println;
 use virtio_fs::VirtioBlockDevice;
-
-use alloc::string::ToString;
 
 pub static FS: Mutex<Option<FileSystem<VirtioBlockDevice>>> = Mutex::new(None);
 

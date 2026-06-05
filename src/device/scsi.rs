@@ -1,5 +1,5 @@
 use virtio_drivers::device::blk::VirtIOBlk;
-use virtio_drivers::transport::pci::bus::{Cam, DeviceFunction};
+use virtio_drivers::transport::pci::bus::{Cam};
 use virtio_drivers::transport::pci::{bus::PciRoot, PciTransport};
 use virtio_drivers::transport::{DeviceType, Transport};
 
@@ -7,7 +7,6 @@ use x86_64::structures::paging::{FrameAllocator, Mapper, Page, PageTableFlags, P
 use x86_64::{PhysAddr, VirtAddr};
 
 
-use crate::device::virtio_hal::print_dma_pool_addr;
 use crate::serial_println;
 use super::virtio_hal::OsHal;
 

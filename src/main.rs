@@ -8,7 +8,6 @@
 extern crate alloc;
 
 use test_os::device::ahci::{find_ahci_controller, initialize_ahci_controller, map_ahci_memory, AHCI_MEMORY_SIZE};
-//use test_os::device::virtio::enumerate_pci;
 use test_os::{memory, println, allocator, register_kb_hook, serial_println};
 use core::panic::PanicInfo;
 use bootloader::{BootInfo, entry_point};
@@ -80,7 +79,6 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
 
     // Remap virtio MMIO as uncached — must happen before find_and_init_blk
     test_os::memory::split_and_remap_as_uncached(
-        &mut mapper,
         &mut frame_allocator,
         phys_mem_offset,
         0xfe000000,

@@ -1,11 +1,9 @@
-use alloc::borrow::ToOwned;
 use alloc::vec::Vec;
 use alloc::string::{String, ToString};
-use fatfs::{Read, Write};
 use crate::allocator::HEAP_KIB;
 use crate::device::ahci::{find_ahci_controller, find_sata_devices, read_ahci_memory, AHCI_MEMORY_SIZE};
 use crate::device::get_all_devices;
-use crate::fs::{read_file, write_file, append_file};
+use crate::fs::{read_file, write_file};
 use crate::memory::{dump_memory, test_memory_access};
 use crate::vga_old::vga_buffer::get_chars;
 use crate::{exit_qemu, print, println, reset_color, serial_print, serial_println, QemuExitCode};

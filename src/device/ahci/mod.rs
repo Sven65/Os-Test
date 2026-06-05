@@ -18,17 +18,17 @@ pub const AHCI_MEMORY_SIZE: usize = AHCI_CONTROLLER_DRIVE_COUNT * AHCI_CONTROLLE
 const PORT_COMMAND_REGISTER_OFFSET: u32 = 0x04; // Command register offset
 const PORT_DETECTED_MASK: u32 = 0x1; // Mask for detecting a device
 
-const AHCI_CTRL_OFFSET: u32 = 0x00; // Controller offset
-const AHCI_IS_OFFSET: u32 = 0x08; // Interrupt Status
-const AHCI_PI_OFFSET: u32 = 0x0C; // Port Implementation
+const _AHCI_CTRL_OFFSET: u32 = 0x00; // Controller offset
+const _AHCI_IS_OFFSET: u32 = 0x08; // Interrupt Status
+const _AHCI_PI_OFFSET: u32 = 0x0C; // Port Implementation
 
-const AHCI_PI_MASK: u32 = 0x0000003F; // Port Implemented Mask
+const _AHCI_PI_MASK: u32 = 0x0000003F; // Port Implemented Mask
 
-const DELAY_COUNT: u64 = 100_000_000;
+const _DELAY_COUNT: u64 = 100_000_000;
 
-const AHCI_CAP_OFFSET: u64 = 0x00; // Capability register offset
-const AHCI_GHC_OFFSET: u64 = 0x04; // Global Host Control register offset
-const AHCI_GHC_AE: u32 = (1 << 31); // AHCI Enable bit
+const _AHCI_CAP_OFFSET: u64 = 0x00; // Capability register offset
+const _AHCI_GHC_OFFSET: u64 = 0x04; // Global Host Control register offset
+const AHCI_GHC_AE: u32 = 1 << 31; // AHCI Enable bit
 const AHCI_GHC_HR: u32 = 0x01; // Host Reset bit
 
 const PORT_REG_BASE: u64 = 0x1000; // Base offset for port registers
@@ -44,25 +44,25 @@ const ATA_FLAG_AN: u32 = 1 << 18;
 
 const AHCI_FLAG_COMMON: u32 = ATA_FLAG_SATA | ATA_FLAG_PIO_DMA | ATA_FLAG_ACPI_SATA | ATA_FLAG_AN;
 
-const ATA_PIO4: u32 = (1 << 4);
-const ATA_UDMA6: u32 = (1 << 6);
+const ATA_PIO4: u32 = 1 << 4;
+const ATA_UDMA6: u32 = 1 << 6;
 
 const AHCI_HFLAG_INTEL_PCS_QUIRK: u32 = 1 << 28;
 
 #[derive(Debug)]
 pub struct AhciController {
     base_address: u64,
-    hflags: u32,
+    _hflags: u32,
     flags: u32,
     pio_mask: u32,
     udma_mask: u32,
 }
 
 impl AhciController {
-    pub fn new(base_address: u64, hflags: u32, flags: u32, pio_mask: u32, udma_mask: u32) -> Self {
+    pub fn new(base_address: u64, _hflags: u32, flags: u32, pio_mask: u32, udma_mask: u32) -> Self {
         Self {
             base_address,
-            hflags,
+            _hflags,
             flags,
             pio_mask,
             udma_mask,
@@ -337,9 +337,9 @@ pub fn find_sata_devices(base_address: u64) {
     }
 }
 
-pub fn find_and_initialize_ahci_controller(mapper: &mut impl Mapper<Size4KiB>, frame_allocator: &mut impl FrameAllocator<Size4KiB>) -> Result<(), AhciError> {
+pub fn find_and_initialize_ahci_controller() -> Result<(), AhciError> {
     let controller_info = find_ahci_controller().ok_or(AhciError::DeviceNotFound)?;
-    let (bus, slot, _, bar5) = controller_info;
+    let (_, _, _, bar5) = controller_info;
     let ahci_base = bar5 & 0xFFFFFFF0; // Ensure the base address is properly masked
 
     // Map the AHCI memory
