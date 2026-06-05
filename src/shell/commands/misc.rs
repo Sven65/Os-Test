@@ -2,7 +2,7 @@ use alloc::string::String;
 use crate::{print, println, serial_print, exit_qemu, reset_color, QemuExitCode};
 use crate::time::get_time;
 use crate::util::bitfield::BitField;
-use crate::vga_old::vga_buffer::get_chars;
+use crate::vga::get_chars;
 use oorandom::Rand32;
 use super::Command;
 
