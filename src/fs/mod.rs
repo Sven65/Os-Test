@@ -107,15 +107,23 @@ pub fn create_dir(path: &str) -> bool {
     result
 }
 
-pub fn list_dir() -> Vec<(String, bool)> {
+pub fn list_dir(path: &str) -> Vec<(String, bool)> {
     let mut guard = FS.lock();
     let fs = match guard.as_mut() {
         Some(fs) => fs,
         None => return Vec::new(),
     };
     let root = fs.root_dir();
+    let dir = if path.is_empty() || path == "/" {
+        root
+    } else {
+        match root.open_dir(path) {
+            Ok(d) => d,
+            Err(_) => { return Vec::new(); }
+        }
+    };
     let mut entries = Vec::new();
-    for entry in root.iter() {
+    for entry in dir.iter() {
         if let Ok(e) = entry {
             let name = core::str::from_utf8(e.short_file_name_as_bytes())
                 .unwrap_or("?")
