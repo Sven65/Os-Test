@@ -20,6 +20,9 @@ use crate::shell::{pass_to_shell, prompt};
 static SCANCODE_QUEUE: OnceCell<ArrayQueue<u8>> = OnceCell::uninit();
 static WAKER: AtomicWaker = AtomicWaker::new();
 
+static CTRLC_FLAG: AtomicBool = AtomicBool::new(false);
+static CTRL_HELD: AtomicBool = AtomicBool::new(false);
+
 pub(crate) fn add_scancode(scancode: u8) {
     if let Ok(queue) = SCANCODE_QUEUE.try_get() {
         if queue.push(scancode).is_err() {
@@ -168,6 +171,21 @@ pub async fn print_keypresses() {
                                     buff.pop();
                                 }
                             }
+                            '\x03' => {
+                                // Ctrl+C — interrupt current operation
+                                crate::task::executor::SUPPRESS_PROMPT.store(false, Ordering::SeqCst);
+                                if HAS_FOCUS.load(Ordering::SeqCst) {
+                                    // Signal focused program to stop
+                                    if let Ok(q) = FOCUSED_INPUT.try_get() {
+                                        q.push(DecodedKey::Unicode('\x03')).ok();
+                                    }
+                                } else {
+                                    // Cancel current shell input
+                                    buff.clear();
+                                    print!("^C\n");
+                                    prompt();
+                                }
+                            }
                             '\n' | '\r' => {
                                 print!("\n");
                                 pass_to_shell(buff);
@@ -197,4 +215,27 @@ pub async fn print_keypresses() {
             }
         }
     }
+}
+
+
+pub fn process_pending_scancodes() {
+    if let Ok(queue) = SCANCODE_QUEUE.try_get() {
+        while let Ok(scancode) = queue.pop() {
+            if scancode == 0x1d {
+                CTRL_HELD.store(true, Ordering::SeqCst);
+            } else if scancode == 0x9d {
+                CTRL_HELD.store(false, Ordering::SeqCst);
+            } else if scancode == 0x2e && CTRL_HELD.load(Ordering::SeqCst) {
+                CTRLC_FLAG.store(true, Ordering::SeqCst);
+            }
+        }
+    }
+}
+
+pub fn check_ctrlc() -> bool {
+    CTRLC_FLAG.load(Ordering::SeqCst)
+}
+
+pub fn clear_ctrlc() {
+    CTRLC_FLAG.store(false, Ordering::SeqCst);
 }

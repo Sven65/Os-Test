@@ -29,6 +29,7 @@ pub mod shell;
 pub mod util;
 pub mod fs;
 pub mod device;
+pub mod net;
 
 pub mod program;
 pub mod config;

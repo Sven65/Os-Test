@@ -21,6 +21,7 @@ use test_os::task::executor::Executor;
 use test_os::device::virtio_hal::{init_hal, mark_dma_pool_uncached};
 use test_os::device::scsi::{find_and_init_blk, map_mmconfig};
 
+use test_os::device::e1000::E1000;
 
 const MMCONFIG_BASE: usize = 0xB000_0000;
 
@@ -94,13 +95,20 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
         test_os::fs::init(blk);
 
         test_os::load_config();
-        
+
         // Test it
         test_os::fs::write_file("hello.txt", b"Hello from my OS!");
         if let Some(data) = test_os::fs::read_file("hello.txt") {
             serial_println!("[fs] Read back: {}", core::str::from_utf8(&data).unwrap_or("?"));
         }
     }
+
+    println!("Please wait, init e1000...");
+
+    test_os::device::e1000::init(boot_info.physical_memory_offset);
+    test_os::net::init();
+    test_os::net::wait_for_dhcp();
+    test_os::net::load_dns_cache();
 
     let mut executor = Executor::new();
     executor.spawn(Task::new(example_task()));
