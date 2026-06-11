@@ -28,7 +28,7 @@ embedded-storage = "0.3.1"
 byteorder = { version = "1.5.0", default-features = false }
 virtio-drivers = { version = "0.13.0", default-features = false, features = ["alloc"] }
 
-smoltcp = { version = "0.11", default-features = false, features = [
+smoltcp = { version = "0.13.1", default-features = false, features = [
 	"proto-ipv4",
 	"proto-dhcpv4",
 	"socket-tcp",

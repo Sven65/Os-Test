@@ -19,8 +19,8 @@ pub struct E1000RxToken(Vec<u8>);
 pub struct E1000TxToken;
 
 impl RxToken for E1000RxToken {
-    fn consume<R, F: FnOnce(&mut [u8]) -> R>(mut self, f: F) -> R {
-        f(&mut self.0)
+    fn consume<R, F: FnOnce(&[u8]) -> R>(self, f: F) -> R {
+        f(&self.0)
     }
 }
 
