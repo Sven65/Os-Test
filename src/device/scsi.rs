@@ -1,5 +1,5 @@
 use virtio_drivers::device::blk::VirtIOBlk;
-use virtio_drivers::transport::pci::bus::{Cam};
+use virtio_drivers::transport::pci::bus::{Cam, MmioCam};
 use virtio_drivers::transport::pci::{bus::PciRoot, PciTransport};
 use virtio_drivers::transport::{DeviceType, Transport};
 
@@ -48,7 +48,7 @@ pub fn map_mmconfig(
 ///   The modern (1.0+) device IDs start at 0x1040 + device type.
 ///   Device type 2 = block, so 0x1042.
 pub fn find_and_init_blk(mmconfig_base: usize) -> Option<VirtIOBlk<OsHal, PciTransport>> {
-    let mut pci_root = unsafe { PciRoot::new(mmconfig_base as *mut u8, Cam::Ecam) };
+    let mut pci_root = PciRoot::new(unsafe { MmioCam::new(mmconfig_base as *mut u8, Cam::Ecam) });
 
     // 255_u8
 
@@ -67,7 +67,7 @@ pub fn find_and_init_blk(mmconfig_base: usize) -> Option<VirtIOBlk<OsHal, PciTra
             let (_status, command) = pci_root.get_status_command(device_function);
             pci_root.set_command(device_function, command | Command::BUS_MASTER | Command::MEMORY_SPACE);
 
-            let Ok(transport) = PciTransport::new::<OsHal>(&mut pci_root, device_function)
+            let Ok(transport) = PciTransport::new::<OsHal, _>(&mut pci_root, device_function)
             else {
                 continue;
             };
