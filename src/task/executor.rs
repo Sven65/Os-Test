@@ -40,7 +40,7 @@ impl Executor {
         loop {
             // Drain spawn queue first
             if let Ok(queue) = SPAWN_QUEUE.try_get() {
-                while let Ok(task) = queue.pop() {
+                while let Some(task) = queue.pop() {
                     self.spawn(task);
                 }
             }
@@ -49,7 +49,7 @@ impl Executor {
 
             // Drain again after running tasks, in case tasks spawned more tasks
             if let Ok(queue) = SPAWN_QUEUE.try_get() {
-                while let Ok(task) = queue.pop() {
+                while let Some(task) = queue.pop() {
                     self.spawn(task);
                 }
             }
@@ -85,7 +85,7 @@ impl Executor {
             waker_cache,
         } = self;
 
-        while let Ok(task_id) = task_queue.pop() {
+        while let Some(task_id) = task_queue.pop() {
             let task = match tasks.get_mut(&task_id) {
                 Some(task) => task,
                 None => continue, // task no longer exists

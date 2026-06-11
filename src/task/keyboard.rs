@@ -56,17 +56,17 @@ impl Stream for ScancodeStream {
             .try_get()
             .expect("scancode queue not initialized");
 
-        if let Ok(scancode) = queue.pop() {
+        if let Some(scancode) = queue.pop() {
             return Poll::Ready(Some(scancode));
         }
 
         WAKER.register(&cx.waker());
         match queue.pop() {
-            Ok(scancode) => {
+            Some(scancode) => {
                 WAKER.take();
                 Poll::Ready(Some(scancode))
             }
-            Err(_) => Poll::Pending,
+            None => Poll::Pending,
         }
     }
 }
@@ -89,7 +89,7 @@ impl InputFocus {
 
     pub fn next_key(&self) -> DecodedKey {
         loop {
-            if let Ok(key) = self.queue.pop() {
+            if let Some(key) = self.queue.pop() {
                 return key;
             }
             core::hint::spin_loop();
@@ -97,7 +97,7 @@ impl InputFocus {
     }
 
     pub fn poll_key(&self) -> Option<DecodedKey> {
-        self.queue.pop().ok()
+        self.queue.pop()
     }
 }
 
@@ -220,7 +220,7 @@ pub async fn print_keypresses() {
 
 pub fn process_pending_scancodes() {
     if let Ok(queue) = SCANCODE_QUEUE.try_get() {
-        while let Ok(scancode) = queue.pop() {
+        while let Some(scancode) = queue.pop() {
             if scancode == 0x1d {
                 CTRL_HELD.store(true, Ordering::SeqCst);
             } else if scancode == 0x9d {
