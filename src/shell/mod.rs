@@ -5,7 +5,9 @@ pub mod history;
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 use core::str;
-use crate::{print, println};
+use core::sync::atomic::Ordering;
+use crate::{print, println, serial_println};
+use crate::interrupts::TICKS;
 
 const SHELL_PROMPT: &str = "> ";
 

@@ -206,12 +206,8 @@ pub async fn print_keypresses() {
                             '\n' | '\r' => {
                                 print!("\n");
                                 
-                                let t0 = crate::interrupts::TICKS.load(Ordering::Relaxed);
                                 history.push(&buff);
-                                let t1 = crate::interrupts::TICKS.load(Ordering::Relaxed);
                                 pass_to_shell(buff);
-                                let t2 = crate::interrupts::TICKS.load(Ordering::Relaxed);
-                                serial_println!("[perf] history: {} ticks, shell: {} ticks", t1 - t0, t2 - t1);
                                
                                 buff = Vec::new();
                                 if !crate::task::executor::SUPPRESS_PROMPT.load(Ordering::SeqCst)

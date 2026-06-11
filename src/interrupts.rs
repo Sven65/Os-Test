@@ -13,6 +13,10 @@ pub static PICS: spin::Mutex<ChainedPics> =
 
 pub static TICKS: AtomicU64 = AtomicU64::new(0);
 
+pub fn rdtsc() -> u64 {
+    unsafe { core::arch::x86_64::_rdtsc() }
+}
+
 #[derive(Debug, Clone, Copy)]
 #[repr(u8)]
 pub enum InterruptIndex {
@@ -71,7 +75,7 @@ extern "x86-interrupt" fn timer_interrupt_handler(_stack_frame: InterruptStackFr
     //print!(".");
 
     TICKS.fetch_add(1, Ordering::Relaxed);
-    
+
     unsafe {
         PICS
             .lock()

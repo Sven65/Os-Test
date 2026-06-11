@@ -2,6 +2,7 @@ pub mod virtio_fs;
 
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
+use core::sync::atomic::Ordering;
 use fatfs::{FileSystem, FsOptions, FormatVolumeOptions, Read, Write, Seek, TimeProvider, Date, Time, DateTime};
 use spin::Mutex;
 use virtio_drivers::device::blk::VirtIOBlk;
@@ -9,6 +10,7 @@ use virtio_drivers::transport::pci::PciTransport;
 use crate::device::virtio_hal::OsHal;
 use crate::serial_println;
 use virtio_fs::VirtioBlockDevice;
+use crate::fs::virtio_fs::{R_CALLS, R_CYCLES, W_CALLS, W_CYCLES};
 
 #[derive(Debug)]
 pub struct RtcTimeProvider;
@@ -177,7 +179,6 @@ pub fn read_file(path: &str) -> Option<Vec<u8>> {
 }
 
 pub fn write_file(path: &str, data: &[u8]) -> bool {
-    let t0 = crate::interrupts::TICKS.load(core::sync::atomic::Ordering::Relaxed);
     let path = resolve_path(path);
     let (dir, filename) = split_path(&path);
     let mut guard = FS.lock();
@@ -189,17 +190,16 @@ pub fn write_file(path: &str, data: &[u8]) -> bool {
     let parent = open_parent!(root, dir);
     let mut file = match parent.create_file(filename) {
         Ok(f) => f,
-        Err(e) => { crate::serial_println!("[fs] create_file({}) failed: {:?}", filename, e); return false; }
+        Err(e) => {
+            crate::serial_println!("[fs] create_file({}) failed: {:?}", filename, e);
+            return false;
+        }
     };
     if file.truncate().is_err() {
         return false;
     }
     let ok = file.write_all(data).is_ok();
-
-    file.flush().ok();
-
-    let dt = crate::interrupts::TICKS.load(core::sync::atomic::Ordering::Relaxed) - t0;
-    crate::serial_println!("[fs] write_file({}, {}B): {} ticks (~{}ms)", path, data.len(), dt, dt * 55);
+    let _ = file.flush();
     ok
 }
 

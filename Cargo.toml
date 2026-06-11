@@ -84,3 +84,6 @@ harness = false
 [[test]]
 name = "stack_overflow"
 harness = false
+
+[profile.dev.package.fatfs]
+opt-level = 2
