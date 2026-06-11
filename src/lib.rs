@@ -34,6 +34,7 @@ pub mod net;
 pub mod program;
 pub mod config;
 
+pub mod wasm;
 
 extern crate alloc;
 
