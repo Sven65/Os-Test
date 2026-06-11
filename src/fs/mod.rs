@@ -177,6 +177,7 @@ pub fn read_file(path: &str) -> Option<Vec<u8>> {
 }
 
 pub fn write_file(path: &str, data: &[u8]) -> bool {
+    let t0 = crate::interrupts::TICKS.load(core::sync::atomic::Ordering::Relaxed);
     let path = resolve_path(path);
     let (dir, filename) = split_path(&path);
     let mut guard = FS.lock();
@@ -188,12 +189,18 @@ pub fn write_file(path: &str, data: &[u8]) -> bool {
     let parent = open_parent!(root, dir);
     let mut file = match parent.create_file(filename) {
         Ok(f) => f,
-        Err(_) => return false,
+        Err(e) => { crate::serial_println!("[fs] create_file({}) failed: {:?}", filename, e); return false; }
     };
     if file.truncate().is_err() {
         return false;
     }
-    file.write_all(data).is_ok()
+    let ok = file.write_all(data).is_ok();
+
+    file.flush().ok();
+
+    let dt = crate::interrupts::TICKS.load(core::sync::atomic::Ordering::Relaxed) - t0;
+    crate::serial_println!("[fs] write_file({}, {}B): {} ticks (~{}ms)", path, data.len(), dt, dt * 55);
+    ok
 }
 
 pub fn append_file(path: &str, data: &[u8]) -> bool {
@@ -214,7 +221,10 @@ pub fn append_file(path: &str, data: &[u8]) -> bool {
         }
     };
     file.seek(fatfs::SeekFrom::End(0)).ok();
-    file.write_all(data).is_ok()
+    let ok = file.write_all(data).is_ok();
+
+    let _ = file.flush();
+    ok
 }
 
 pub fn delete_file(path: &str) -> bool {
@@ -291,9 +301,7 @@ pub fn list_dir(path: &str) -> Vec<DirEntry> {
     let mut entries = Vec::new();
     for entry in dir.iter() {
         if let Ok(e) = entry {
-            let name = core::str::from_utf8(e.short_file_name_as_bytes())
-                .unwrap_or("?")
-                .to_string();
+            let name = e.file_name();
             let m = e.modified();
             entries.push(DirEntry {
                 name,

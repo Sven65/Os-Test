@@ -39,29 +39,17 @@ pub fn convert_ansii_to_color(buf: Vec<u8>) -> ColorCode {
 
     let color_result = from_utf8(&*buf);
 
-    serial_println!("Color result: {:#?}", color_result);
-
-
-    serial_println!("Yeet");
-
     match color_result {
         Err(_) => {
             panic!("Exception when parsing color code");
         },
         Ok(v) => {
-            serial_println!("Color string: {}", v.replace("[", ""));
-
             let replaced_string = v.replace("[", "");
             // let mut is_light = false;
 
             let split = replaced_string.split(";");
 
-            serial_println!("Hello, Serial World!");
-
             for part in split {
-                serial_println!("Part {}", part);
-                serial_println!("Color is {:#?}", convert_code_to_color(part));
-
                 let ch = part.chars().nth(0).unwrap();
 
                 match &ch {
@@ -71,8 +59,6 @@ pub fn convert_ansii_to_color(buf: Vec<u8>) -> ColorCode {
                     _ => {},
                 }
             }
-
-            serial_println!("FG: {:#?}, BG: {:#?}", fg_color, bg_color);
 
             color_code = ColorCode::new(fg_color, bg_color);
         }

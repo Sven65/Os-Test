@@ -1,3 +1,4 @@
+use core::sync::atomic::{AtomicU64, Ordering};
 use crate::{gdt, hlt_loop, println, serial_println};
 use lazy_static::lazy_static;
 use x86_64::structures::idt::{InterruptDescriptorTable, InterruptStackFrame, PageFaultErrorCode};
@@ -9,6 +10,8 @@ pub const PIC_2_OFFSET: u8 = PIC_1_OFFSET + 8;
 
 pub static PICS: spin::Mutex<ChainedPics> =
     spin::Mutex::new(unsafe { ChainedPics::new(PIC_1_OFFSET, PIC_2_OFFSET) });
+
+pub static TICKS: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Debug, Clone, Copy)]
 #[repr(u8)]
@@ -67,6 +70,8 @@ extern "x86-interrupt" fn double_fault_handler( stack_frame: InterruptStackFrame
 extern "x86-interrupt" fn timer_interrupt_handler(_stack_frame: InterruptStackFrame) {
     //print!(".");
 
+    TICKS.fetch_add(1, Ordering::Relaxed);
+    
     unsafe {
         PICS
             .lock()

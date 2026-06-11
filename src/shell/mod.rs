@@ -1,5 +1,6 @@
 mod commands;
 mod flags;
+pub mod history;
 
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;

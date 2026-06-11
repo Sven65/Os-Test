@@ -16,6 +16,7 @@ use pc_keyboard::{layouts, DecodedKey, HandleControl, PS2Keyboard, ScancodeSet1}
 use pc_keyboard::layouts::AnyLayout;
 use crate::{print, println, serial_println};
 use crate::shell::{pass_to_shell, prompt};
+use crate::shell::history::History;
 
 static SCANCODE_QUEUE: OnceCell<ArrayQueue<u8>> = OnceCell::uninit();
 static WAKER: AtomicWaker = AtomicWaker::new();
@@ -130,6 +131,20 @@ macro_rules! register_kb_hook {
     }
 }
 
+fn replace_line(buff: &mut Vec<u8>, new: &[u8]) {
+    let chars = core::str::from_utf8(buff)
+        .map(|s| s.chars().count())
+        .unwrap_or(buff.len());
+    for _ in 0..chars {
+        print!("\x7f");
+    }
+    buff.clear();
+    buff.extend_from_slice(new);
+    if let Ok(s) = core::str::from_utf8(buff) {
+        print!("{}", s);
+    }
+}
+
 pub async fn print_keypresses() {
     let mut scancodes = ScancodeStream::new();
 
@@ -149,6 +164,7 @@ pub async fn print_keypresses() {
     let mut keyboard = PS2Keyboard::new(ScancodeSet1::new(), kb_layout, HandleControl::MapLettersToUnicode);
 
     let mut buff: Vec<u8> = Vec::new();
+    let mut history = History::load();
 
     prompt();
 
@@ -182,13 +198,21 @@ pub async fn print_keypresses() {
                                 } else {
                                     // Cancel current shell input
                                     buff.clear();
+                                    history.reset_cursor();
                                     print!("^C\n");
                                     prompt();
                                 }
                             }
                             '\n' | '\r' => {
                                 print!("\n");
+                                
+                                let t0 = crate::interrupts::TICKS.load(Ordering::Relaxed);
+                                history.push(&buff);
+                                let t1 = crate::interrupts::TICKS.load(Ordering::Relaxed);
                                 pass_to_shell(buff);
+                                let t2 = crate::interrupts::TICKS.load(Ordering::Relaxed);
+                                serial_println!("[perf] history: {} ticks, shell: {} ticks", t1 - t0, t2 - t1);
+                               
                                 buff = Vec::new();
                                 if !crate::task::executor::SUPPRESS_PROMPT.load(Ordering::SeqCst)
                                     && !HAS_FOCUS.load(Ordering::SeqCst) {
@@ -206,9 +230,24 @@ pub async fn print_keypresses() {
                             }
                         }
                     }
-                    DecodedKey::RawKey(_) => {
-                        for f in &*KEYBOARD_HOOKS.lock().hooks {
-                            f();
+                    DecodedKey::RawKey(raw) => {
+                        use pc_keyboard::KeyCode;
+                        match raw {
+                            KeyCode::ArrowUp => {
+                                if let Some(line) = history.prev() {
+                                    replace_line(&mut buff, &line);
+                                }
+                            }
+                            KeyCode::ArrowDown => {
+                                if let Some(line) = history.next() {
+                                    replace_line(&mut buff, &line);
+                                }
+                            }
+                            _ => {
+                                for f in &*KEYBOARD_HOOKS.lock().hooks {
+                                    f();
+                                }
+                            }
                         }
                     }
                 }
