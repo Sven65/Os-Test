@@ -93,7 +93,15 @@ impl Command for FetchCommand {
     fn name(&self) -> &'static str { "fetch" }
     fn description(&self) -> &'static str { "HTTP GET: fetch <url>" }
     fn execute(&self, args: &[String]) {
-        if args.is_empty() { println!("Usage: fetch <url>"); return; }
+        if args.is_empty() { println!("Usage: fetch <url> [-o <file>]"); return; }
+
+        let mut out_file: Option<&str> = None;
+        if let Some(pos) = args.iter().position(|a| a == "-o") {
+            match args.get(pos + 1) {
+                Some(f) => out_file = Some(f),
+                None => { println!("Usage: fetch <url> -o <file>"); return; }
+            }
+        }
 
         if args[0].starts_with("https://") {
             println!("HTTPS not supported yet, try http://");
@@ -130,10 +138,20 @@ impl Command for FetchCommand {
 
         match crate::net::http_get(host, path, ip, port) {
             Some(response) => {
-                if let Some(body_start) = response.find("\r\n\r\n") {
-                    println!("{}", &response[body_start + 4..]);
-                } else {
-                    println!("{}", response);
+                let body = match response.windows(4).position(|w| w == b"\r\n\r\n") {
+                    Some(pos) => &response[pos + 4..],
+                    None => &response[..],
+                };
+
+                match out_file {
+                    Some(filename) => {
+                        if crate::fs::write_file(filename, body) {
+                            println!("Saved {} bytes to {}", body.len(), filename);
+                        } else {
+                            println!("Failed to write {}", filename);
+                        }
+                    }
+                    None => println!("{}", String::from_utf8_lossy(body)),
                 }
             }
             None => println!("fetch failed"),

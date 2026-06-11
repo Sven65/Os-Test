@@ -4,7 +4,7 @@ use smoltcp::time::Instant;
 use smoltcp::wire::*;
 use smoltcp::phy::{Device, DeviceCapabilities, Medium, RxToken, TxToken};
 use alloc::vec::Vec;
-use alloc::string::String;
+use alloc::string::{String, ToString};
 use alloc::collections::BTreeMap;
 use spin::Mutex;
 use lazy_static::lazy_static;
@@ -372,7 +372,7 @@ fn resolve_uncached(hostname: &str) -> Option<Ipv4Address> {
     None
 }
 
-pub fn http_get(host: &str, path: &str, ip: Ipv4Address, port: u16) -> Option<String> {
+pub fn http_get(host: &str, path: &str, ip: Ipv4Address, port: u16) -> Option<Vec<u8>> {
     let mut guard = NET.lock();
     let stack = guard.as_mut()?;
 
@@ -464,5 +464,13 @@ pub fn http_get(host: &str, path: &str, ip: Ipv4Address, port: u16) -> Option<St
     stack.sockets.remove(handle);
 
     if total == 0 { return None; }
-    Some(String::from_utf8_lossy(&response[..total]).into_owned())
+    response.truncate(total);
+    Some(response)
+}
+
+pub fn http_get_string(host: &str, path: &str, ip: Ipv4Address, port: u16) -> Option<String> {
+    match http_get(host, path, ip, port) {
+        Some(bits) => Some(String::from_utf8(bits).unwrap().to_string()),
+        None => None,
+    }
 }

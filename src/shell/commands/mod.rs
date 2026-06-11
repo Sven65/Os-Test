@@ -3,6 +3,7 @@ mod system;
 mod fs;
 mod misc;
 mod net;
+mod prog;
 
 use alloc::string::String;
 use alloc::vec;
@@ -44,6 +45,7 @@ pub fn get_commands() -> Vec<&'static dyn Command> {
         &net::NetCommand,
         &net::PingCommand,
         &net::FetchCommand,
+        &prog::RunCommand,
     ]
 }
 

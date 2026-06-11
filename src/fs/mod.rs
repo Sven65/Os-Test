@@ -190,6 +190,9 @@ pub fn write_file(path: &str, data: &[u8]) -> bool {
         Ok(f) => f,
         Err(_) => return false,
     };
+    if file.truncate().is_err() {
+        return false;
+    }
     file.write_all(data).is_ok()
 }
 
