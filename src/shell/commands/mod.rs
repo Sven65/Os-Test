@@ -23,6 +23,7 @@ pub fn get_commands() -> Vec<&'static dyn Command> {
         &system::AhciCommand,
         &system::DumpCommand,
         &system::ConfigCommand,
+        &system::MemInfoCommand,
         &fs::WriteCommand,
         &fs::ReadCommand,
         &fs::LsCommand,

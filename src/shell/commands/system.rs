@@ -3,7 +3,7 @@ use crate::{println, print};
 use crate::device::ahci::{find_ahci_controller, find_sata_devices, read_ahci_memory, AHCI_MEMORY_SIZE};
 use crate::device::get_all_devices;
 use crate::memory::{dump_memory, test_memory_access};
-use crate::allocator::HEAP_KIB;
+use crate::allocator::{HEAP_SIZE, HEAP_START};
 use super::Command;
 
 pub struct HelpCommand;
@@ -58,7 +58,13 @@ impl Command for DumpCommand {
     fn execute(&self, args: &[String]) {
         if args.is_empty() { println!("Usage: dump <mem|ahci>"); return; }
         match args[0].as_str() {
-            "mem" => dump_memory(0x_4444_4444_0000, HEAP_KIB),
+            "mem" => {
+                let len = args.get(1)
+                    .and_then(|s| s.parse::<usize>().ok())
+                    .unwrap_or(4096)
+                    .min(HEAP_SIZE);
+                dump_memory(HEAP_START as u64, len);
+            }
             "ahci" => match find_ahci_controller() {
                 Some((_bus, _slot, _function, base_addr)) => read_ahci_memory(base_addr, AHCI_MEMORY_SIZE),
                 None => println!("No AHCI controller found"),
@@ -110,5 +116,22 @@ impl Command for ConfigCommand {
             }
         }
         println!("Saved {} = {}", key, value);
+    }
+}
+
+pub struct MemInfoCommand;
+impl Command for MemInfoCommand {
+    fn name(&self) -> &'static str { "meminfo" }
+    fn description(&self) -> &'static str { "Show memory usage" }
+    fn execute(&self, _args: &[String]) {
+        use core::sync::atomic::Ordering;
+        let used = crate::allocator::fixed_size_block::ALLOC_BYTES.load(Ordering::Relaxed) as usize;
+        let total = crate::allocator::HEAP_SIZE;
+        println!(
+            "Heap: {} KiB / {} KiB used ({}%)",
+            used / 1024,
+            total / 1024,
+            used * 100 / total,
+        );
     }
 }

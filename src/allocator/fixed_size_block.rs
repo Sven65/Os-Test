@@ -4,12 +4,14 @@ use core::{
     mem,
     ptr::{self, NonNull},
 };
+use core::sync::atomic::{AtomicU64, Ordering};
 
 /// The block sizes to use.
 ///
 /// The sizes must each be power of 2 because they are also used as
 /// the block alignment (alignments must be always powers of 2).
 const BLOCK_SIZES: &[usize] = &[8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096];
+pub static ALLOC_BYTES: AtomicU64 = AtomicU64::new(0);
 
 /// Choose an appropriate block size for the given layout.
 ///
@@ -61,7 +63,7 @@ unsafe impl GlobalAlloc for Locked<FixedSizeBlockAllocator> {
         let mut allocator = self.lock();
         match list_index(&layout) {
             Some(index) => {
-                match allocator.list_heads[index].take() {
+                let ptr = match allocator.list_heads[index].take() {
                     Some(node) => {
                         allocator.list_heads[index] = node.next.take();
                         node as *mut ListNode as *mut u8
@@ -74,9 +76,19 @@ unsafe impl GlobalAlloc for Locked<FixedSizeBlockAllocator> {
                         let layout = Layout::from_size_align(block_size, block_align).unwrap();
                         allocator.fallback_alloc(layout)
                     }
+                };
+                if !ptr.is_null() {
+                    ALLOC_BYTES.fetch_add(BLOCK_SIZES[index] as u64, Ordering::Relaxed);
                 }
+                ptr
             }
-            None => allocator.fallback_alloc(layout),
+            None => {
+                let ptr = allocator.fallback_alloc(layout);
+                if !ptr.is_null() {
+                    ALLOC_BYTES.fetch_add(layout.size() as u64, Ordering::Relaxed);
+                }
+                ptr
+            }
         }
     }
 
@@ -84,6 +96,7 @@ unsafe impl GlobalAlloc for Locked<FixedSizeBlockAllocator> {
         let mut allocator = self.lock();
         match list_index(&layout) {
             Some(index) => {
+                ALLOC_BYTES.fetch_sub(BLOCK_SIZES[index] as u64, Ordering::Relaxed);
                 let new_node = ListNode {
                     next: allocator.list_heads[index].take(),
                 };
@@ -95,6 +108,7 @@ unsafe impl GlobalAlloc for Locked<FixedSizeBlockAllocator> {
                 allocator.list_heads[index] = Some(&mut *new_node_ptr);
             }
             None => {
+                ALLOC_BYTES.fetch_sub(layout.size() as u64, Ordering::Relaxed);
                 let ptr = NonNull::new(ptr).unwrap();
                 allocator.fallback_allocator.deallocate(ptr, layout);
             }

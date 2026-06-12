@@ -15,8 +15,10 @@ impl Command for RunCommand {
         match read_file(&args[0]) {
             Some(data) => {
                 // Execute code
+
+                let prog_args = args.to_vec();
                 
-                match run(data) {
+                match run(data, prog_args) {
                     Ok(()) => println!("Program completed"),
                     Err(e) => println!("Error during program execution: {}", e),
                 }

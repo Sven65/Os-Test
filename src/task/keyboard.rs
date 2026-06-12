@@ -36,6 +36,10 @@ pub(crate) fn add_scancode(scancode: u8) {
     }
 }
 
+pub fn pop_scancode() -> Option<u8> {
+    SCANCODE_QUEUE.try_get().ok()?.pop()
+}
+
 pub struct ScancodeStream {
     _private: (),
 }

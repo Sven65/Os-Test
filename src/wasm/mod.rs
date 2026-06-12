@@ -1,3 +1,4 @@
+use alloc::string::String;
 use alloc::vec::Vec;
 use wasmi::{Engine, Linker, Module, Store};
 use crate::wasm::state::HostState;
@@ -6,10 +7,13 @@ pub mod state;
 mod host;
 
 
-pub fn run(data: Vec<u8>) -> Result<(), wasmi::Error> {
+pub fn run(data: Vec<u8>, args: Vec<String>) -> Result<(), wasmi::Error> {
     let engine = Engine::default();
     let module = Module::new(&engine, data)?;
-    let mut store = Store::new(&engine, HostState::default());
+    let mut store = Store::new(&engine, HostState {
+        args,
+        ..Default::default()
+    });
     let mut linker = Linker::new(&engine);
     host::register_all(&mut linker)?;
 
